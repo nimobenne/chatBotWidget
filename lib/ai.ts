@@ -35,6 +35,11 @@ function sanitizeBusinessInfo(business: BusinessRow) {
   };
 }
 
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 function buildSystemPrompt(business: BusinessRow) {
   return `You are a friendly AI receptionist for ${business.name}.
 Rules:
@@ -44,7 +49,7 @@ Rules:
 - In booking flow, collect only service, date/time, customer name and customer email.
 - Never ask for a phone number.
 - Before confirming a booking, read back the email address and ask for explicit confirmation.
-- Call createBooking only after the user confirms the email is correct.
+- Call createBooking only after the user confirms the email is correct.\n- If calendar sync fails, be transparent and tell the user the appointment is saved but not yet synced.
 - Use tools for availability, booking, and handoff.
 - Only confirm a booking after createBooking succeeds.
 - If unsure or unable to fulfill, use handoffToOwner.
@@ -192,15 +197,27 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
               const customerName = String(args.customerName || '');
               const customerEmail = String(args.customerEmail || '');
 
+              if (!isValidEmail(customerEmail)) {
+                result = { error: 'invalid_email', message: 'Please provide a valid email address to confirm your booking.' };
+                toolOutputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result) });
+                continue;
+              }
+
               const times = calculateBookingTimes({ business, serviceName, startTimeISO });
-              const eventId = await createGoogleCalendarEvent({
-                businessId: business.id,
-                summary: `${serviceName} - ${customerName}`,
-                description: `Email: ${customerEmail}`,
-                startISO: times.startISO,
-                endISO: times.endISO,
-                timezone: business.timezone
-              });
+              let eventId: string | undefined;
+              let calendarSyncError: string | null = null;
+              try {
+                eventId = await createGoogleCalendarEvent({
+                  businessId: business.id,
+                  summary: `${serviceName} - ${customerName}`,
+                  description: `Email: ${customerEmail}`,
+                  startISO: times.startISO,
+                  endISO: times.endISO,
+                  timezone: business.timezone
+                });
+              } catch (e) {
+                calendarSyncError = e instanceof Error ? e.message : 'Calendar sync failed';
+              }
 
               const booking = await createBookingRecord({
                 business,
@@ -222,7 +239,7 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
                 bookingId: booking.id
               });
 
-              result = { bookingId: booking.id, confirmedTime: booking.start_time, calendarEventId: eventId ?? null };
+              result = { bookingId: booking.id, confirmedTime: booking.start_time, calendarEventId: eventId ?? null, calendarSynced: Boolean(eventId), calendarSyncError };
             } catch (error) {
               const message = error instanceof Error ? error.message : 'Unknown booking error';
               if (message.toLowerCase().includes('overlap') || message.toLowerCase().includes('conflict')) {

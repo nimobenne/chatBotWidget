@@ -66,3 +66,14 @@ When Google Calendar is connected for a business, available slots are filtered w
 
 
 Booking confirmations can optionally be emailed to customers when `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are set.
+
+
+## Supabase schema (required)
+Run `supabase.schema.sql` in your Supabase SQL editor to ensure table/column names match the app code (`messages`, `last_user_message`, `last_assistant_message`, `google_calendar_connections`, and booking overlap guard).
+
+## Google Calendar booking troubleshooting
+If bookings are saved in Supabase but not appearing in Google Calendar:
+1. Make sure OAuth was connected for the same `businessId` you are booking against.
+2. Verify `google_calendar_connections` contains a row for that business.
+3. Confirm `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` are set and deployment was redeployed.
+4. Check booking response details for `calendarSynced` and `calendarSyncError`.
