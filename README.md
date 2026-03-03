@@ -11,7 +11,7 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
   - per-business CORS allowlist
   - input validation + sanitization
   - in-memory rate limiting (dev-safe baseline)
-  - OpenAI Responses API with tool-calling for availability and booking
+  - OpenAI Responses API for business FAQ chat.
 - File-based JSON store by default, with a DAL interface ready for Postgres implementation.
 - Basic admin UI at `/admin` with optional password protection.
 
@@ -35,6 +35,11 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
 6. Open:
    - `http://localhost:3000/demo?biz=demo_barber`
 
+
+## Demo business to test
+- Use `businessId=demo_barber` for local and Vercel testing.
+- Quick URL: `/demo?biz=demo_barber`
+
 ## Embed on any website
 ```html
 <script
@@ -47,7 +52,7 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
 
 ## Important embed behavior
 - The widget now posts chat requests to the same origin that serves `widget.js` (not the host page origin).
-- For cross-site embeds, add hostnames (or wildcard patterns like `*.vercel.app`) to each business `allowedDomains`.
+- For cross-site embeds, add the exact hostname to business `allowedDomains`.
 
 ## Notes on data layer
 - JSON files under `/data` are used for local/dev.
