@@ -35,25 +35,31 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
   const client = new OpenAI({ apiKey });
   const bookingEnabled = process.env.BOOKING_ENABLED === 'true';
 
-  const response = await client.responses.create({
-    model: 'gpt-4.1-mini',
-    input: [
-      { role: 'system', content: getSystemPrompt(business.name, bookingEnabled) },
-      {
-        role: 'user',
-        content: `Business config (source of truth): ${JSON.stringify(business)}\nBooking enabled: ${bookingEnabled}\nCustomer message: ${input.message}`
-      }
-    ]
-  });
+  try {
+    const response = await client.responses.create({
+      model: 'gpt-4.1-mini',
+      input: [
+        { role: 'system', content: getSystemPrompt(business.name, bookingEnabled) },
+        {
+          role: 'user',
+          content: `Business config (source of truth): ${JSON.stringify(business)}\nBooking enabled: ${bookingEnabled}\nCustomer message: ${input.message}`
+        }
+      ]
+    });
 
-  const assistantText = response.output_text || 'Sorry, I could not process that request.';
-  await store.logConversation({
-    businessId: input.businessId,
-    sessionId: input.sessionId,
-    userMessage: input.message,
-    assistantMessage: assistantText,
-    createdAt: new Date().toISOString()
-  });
+    const assistantText = response.output_text || 'Sorry, I could not process that request.';
+    await store.logConversation({
+      businessId: input.businessId,
+      sessionId: input.sessionId,
+      userMessage: input.message,
+      assistantMessage: assistantText,
+      createdAt: new Date().toISOString()
+    });
 
-  return { message: assistantText };
+    return { message: assistantText };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('OpenAI API error:', message);
+    throw new Error(`AI service error: ${message}`);
+  }
 }

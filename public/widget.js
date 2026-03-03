@@ -5,6 +5,8 @@
   const businessId = script.getAttribute('data-business') || 'demo_barber';
   const position = script.getAttribute('data-position') || 'bottom-right';
   const accent = script.getAttribute('data-accent') || '#111827';
+  const icon = script.getAttribute('data-icon') || '💬';
+  const greeting = script.getAttribute('data-greeting') || 'Hi! I can help with services, hours, and booking.';
   const apiBase = new URL(script.src, window.location.href).origin;
   const sessionKey = `ai_receptionist_session_${businessId}`;
   const sessionId = localStorage.getItem(sessionKey) || crypto.randomUUID();
@@ -23,7 +25,8 @@
   style.textContent = `
     .bubble { width:56px;height:56px;border-radius:999px;background:${accent};color:#fff;border:0;cursor:pointer;font-size:24px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
     .panel { display:none; width:340px;height:460px;background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden;font-family:Arial,sans-serif }
-    .head { padding:12px 14px;background:${accent};color:white;font-weight:600 }
+    .head { padding:12px 14px;background:${accent};color:white;font-weight:600;display:flex;justify-content:space-between;align-items:center }
+    .minimize { background:transparent;border:0;color:white;cursor:pointer;font-size:18px;padding:0 }
     .msgs { height:340px;overflow:auto;padding:10px;background:#f8fafc }
     .row { margin:8px 0; display:flex }
     .u{justify-content:flex-end}.a{justify-content:flex-start}
@@ -32,15 +35,20 @@
     .composer{display:flex;gap:6px;padding:10px;border-top:1px solid #e5e7eb}
     .input{flex:1;padding:8px;border:1px solid #d1d5db;border-radius:8px}
     .send{padding:8px 12px;border:0;border-radius:8px;background:${accent};color:white;cursor:pointer}
+    .send:disabled{opacity:0.6;cursor:not-allowed}
+    .loading{font-size:12px;color:#6b7280;text-align:center;padding:4px}
+    .spinner{display:inline-block;width:12px;height:12px;border:2px solid #e5e7eb;border-top-color:${accent};border-radius:50%;animation:spin .8s linear infinite;margin-right:4px;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
   `;
 
   const bubble = document.createElement('button');
   bubble.className = 'bubble';
-  bubble.textContent = '✂';
+  bubble.textContent = icon;
+  bubble.setAttribute('aria-label', 'Open chat');
 
   const panel = document.createElement('div');
   panel.className = 'panel';
-  panel.innerHTML = '<div class="head">Chat with us</div><div class="msgs"></div><div class="composer"><input class="input" placeholder="Type a message..."/><button class="send">Send</button></div>';
+  panel.innerHTML = `<div class="head"><span>Chat with us</span><button class="minimize" aria-label="Minimize chat">−</button></div><div class="msgs"></div><div class="composer"><input class="input" placeholder="Type a message..." aria-label="Message input"/><button class="send" aria-label="Send message">Send</button></div>`;
 
   shadow.appendChild(style);
   shadow.appendChild(panel);
@@ -49,6 +57,7 @@
   const msgs = panel.querySelector('.msgs');
   const input = panel.querySelector('.input');
   const send = panel.querySelector('.send');
+  const minimize = panel.querySelector('.minimize');
 
   function addMsg(text, who) {
     const row = document.createElement('div');
@@ -61,19 +70,39 @@
     msgs.scrollTop = msgs.scrollHeight;
   }
 
-  addMsg('Hi! I can help with services, hours, and booking.', 'a');
+  addMsg(greeting, 'a');
 
   bubble.onclick = () => {
     const open = panel.style.display === 'block';
     panel.style.display = open ? 'none' : 'block';
+    if (!open) input.focus();
   };
+
+  minimize.onclick = () => {
+    panel.style.display = 'none';
+  };
+
+  function setLoading(isLoading) {
+    send.disabled = isLoading;
+    if (isLoading) {
+      const loading = document.createElement('div');
+      loading.className = 'loading';
+      loading.id = 'loading-indicator';
+      loading.innerHTML = '<span class="spinner"></span>Typing...';
+      msgs.appendChild(loading);
+      msgs.scrollTop = msgs.scrollHeight;
+    } else {
+      const loading = msgs.querySelector('#loading-indicator');
+      if (loading) loading.remove();
+    }
+  }
 
   async function sendMessage() {
     const message = input.value.trim();
     if (!message) return;
     input.value = '';
     addMsg(message, 'u');
-    send.disabled = true;
+    setLoading(true);
     try {
       const res = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
@@ -81,11 +110,15 @@
         body: JSON.stringify({ businessId, sessionId, message })
       });
       const data = await res.json();
-      addMsg(data.message || data.error || 'Sorry, I could not respond.', 'a');
+      setLoading(false);
+      if (data.error) {
+        addMsg(data.error, 'a');
+      } else {
+        addMsg(data.message || 'Sorry, I could not respond.', 'a');
+      }
     } catch {
+      setLoading(false);
       addMsg('Network error. Please try again.', 'a');
-    } finally {
-      send.disabled = false;
     }
   }
 

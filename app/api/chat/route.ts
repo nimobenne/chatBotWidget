@@ -3,9 +3,11 @@ import { runAssistant, validateChatInput } from '@/lib/ai';
 import { getStore } from '@/lib/store';
 
 const rateMap = new Map<string, { count: number; resetAt: number }>();
+// NOTE: In-memory rate limiting doesn't work with multiple server instances.
+// For production (e.g., Vercel with multiple instances), use Redis or similar.
 
 function sanitize(text: string): string {
-  return text.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+  return text.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 1000);
 }
 
 function extractHost(origin: string | null): string {
