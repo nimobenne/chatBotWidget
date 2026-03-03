@@ -13,7 +13,7 @@ export async function createHandoffAndAlert(params: {
     summary: params.summary,
     last_user_message: params.lastUserMessage,
     customer_contact: params.customerContact,
-    channel: 'chat'
+    channel: 'widget'
   });
 
   const to = params.business.contact_email;
