@@ -117,6 +117,46 @@ function normalizeFaq(input: unknown): Record<string, string> | null {
   return null;
 }
 
+
+function normalizeHours(input: unknown): Record<string, { open: string; close: string } | null> {
+  const normalized: Record<string, { open: string; close: string } | null> = {};
+  if (!input || typeof input !== 'object') {
+    return {
+      monday: { open: '09:00', close: '18:00' },
+      tuesday: { open: '09:00', close: '18:00' },
+      wednesday: { open: '09:00', close: '18:00' },
+      thursday: { open: '09:00', close: '18:00' },
+      friday: { open: '09:00', close: '18:00' },
+      saturday: { open: '10:00', close: '15:00' },
+      sunday: null
+    };
+  }
+
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    const key = k.toLowerCase();
+    if (v === null) {
+      normalized[key] = null;
+      continue;
+    }
+    if (v && typeof v === 'object') {
+      const raw = v as Record<string, unknown>;
+      if (typeof raw.open === 'string' && typeof raw.close === 'string') {
+        normalized[key] = { open: raw.open, close: raw.close };
+      }
+    }
+  }
+
+  return Object.keys(normalized).length ? normalized : {
+    monday: { open: '09:00', close: '18:00' },
+    tuesday: { open: '09:00', close: '18:00' },
+    wednesday: { open: '09:00', close: '18:00' },
+    thursday: { open: '09:00', close: '18:00' },
+    friday: { open: '09:00', close: '18:00' },
+    saturday: { open: '10:00', close: '15:00' },
+    sunday: null
+  };
+}
+
 function normalizeServices(input: unknown, defaultBufferMin: number | null): Array<{ name: string; duration_min: number; price_range?: string; buffer_min?: number }> {
   if (!Array.isArray(input)) return [];
 
@@ -155,7 +195,7 @@ function normalizeBusiness(row: RawBusinessRow): BusinessRow {
     slug: row.slug,
     name: row.name,
     timezone: row.timezone,
-    hours: row.hours || {},
+    hours: normalizeHours(row.hours),
     services: normalizeServices(row.services, row.buffer_min),
     policies: row.policies || null,
     contact_email: row.contact_email,
@@ -329,6 +369,7 @@ class SupabaseStore implements Store {
       .from('bookings')
       .select('*')
       .eq('business_id', business_id)
+      .eq('status', 'confirmed')
       .lt('start_time', end)
       .gt('end_time', start)
       .order('start_time');
