@@ -17,6 +17,17 @@ function extractHost(origin: string | null): string {
   }
 }
 
+function domainAllowed(host: string, allowedDomains: string[]): boolean {
+  const normalized = host.toLowerCase();
+  return allowedDomains.some((entry) => {
+    const rule = entry.toLowerCase().trim();
+    if (!rule) return false;
+    if (rule === '*') return true;
+    if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
+    return normalized === rule;
+  });
+}
+
 function checkRateLimit(key: string, max = 20, windowMs = 60_000): boolean {
   const now = Date.now();
   const current = rateMap.get(key);
@@ -81,4 +92,4 @@ export async function OPTIONS(req: NextRequest) {
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
   res.headers.set('Vary', 'Origin');
   return res;
-}
+};

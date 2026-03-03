@@ -45,6 +45,10 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
 ></script>
 ```
 
+## Important embed behavior
+- The widget now posts chat requests to the same origin that serves `widget.js` (not the host page origin).
+- For cross-site embeds, add hostnames (or wildcard patterns like `*.vercel.app`) to each business `allowedDomains`.
+
 ## Notes on data layer
 - JSON files under `/data` are used for local/dev.
 - To move to Postgres (Neon/Supabase), implement `DataStore` in `lib/store.ts` and set `DATA_STORE=postgres`.
@@ -66,3 +70,26 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
 - Calendar integration is designed behind env vars and can be added later:
   - if business-level Google credentials exist, call FreeBusy + create event
   - else fallback to internal availability/booking store
+
+
+## Vercel 404 troubleshooting
+If Vercel shows `404: NOT_FOUND`, check these first:
+
+1. **Root Directory**
+   - In Vercel Project Settings, set Root Directory to the folder containing `package.json` (this repo root).
+2. **Framework Preset**
+   - Ensure framework is **Next.js** (this repo includes `vercel.json` to force that).
+3. **Build Output Misconfiguration**
+   - Leave Output Directory empty for Next.js (do not set it to `public` or another folder).
+4. **Redeploy after env vars**
+   - Add env vars (`OPENAI_API_KEY` at minimum), then trigger a fresh deploy.
+5. **Route checks**
+   - `/` and `/demo?biz=demo_barber` should load.
+   - `/widget.js` should return the embed script.
+
+Quick verification commands after deploy:
+```bash
+curl -i https://YOUR_DOMAIN/
+curl -i https://YOUR_DOMAIN/demo?biz=demo_barber
+curl -i https://YOUR_DOMAIN/widget.js
+```
