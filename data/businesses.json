@@ -1,0 +1,37 @@
+[
+  {
+    "businessId": "demo_barber",
+    "name": "Downtown Fade Studio",
+    "timezone": "America/New_York",
+    "hours": {
+      "monday": { "open": "09:00", "close": "18:00" },
+      "tuesday": { "open": "09:00", "close": "18:00" },
+      "wednesday": { "open": "09:00", "close": "18:00" },
+      "thursday": { "open": "09:00", "close": "19:00" },
+      "friday": { "open": "09:00", "close": "19:00" },
+      "saturday": { "open": "10:00", "close": "16:00" },
+      "sunday": null
+    },
+    "services": [
+      { "name": "Classic Haircut", "durationMin": 30, "priceRange": "$30-$40", "bufferMin": 10 },
+      { "name": "Skin Fade", "durationMin": 45, "priceRange": "$40-$55", "bufferMin": 10 },
+      { "name": "Beard Trim", "durationMin": 20, "priceRange": "$20-$30", "bufferMin": 5 }
+    ],
+    "policies": {
+      "cancellation": "Please provide at least 12 hours notice for cancellations.",
+      "booking": "Walk-ins welcome, appointments recommended."
+    },
+    "contact": {
+      "phone": "+1-555-0100",
+      "email": "hello@downtownfade.example",
+      "address": "100 Main St, Suite 12"
+    },
+    "faq": {
+      "parking": "Street parking is available nearby.",
+      "late": "If you are more than 10 minutes late we may need to reschedule."
+    },
+    "allowedDomains": ["localhost", "127.0.0.1"],
+    "bookingMode": "calendar",
+    "styling": { "accentColor": "#111827" }
+  }
+]
