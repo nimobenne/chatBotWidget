@@ -16,7 +16,7 @@ function getSystemPrompt(businessName: string, bookingEnabled: boolean) {
   return `You are a friendly AI receptionist for ${businessName}. Be concise and practical.
 Rules:
 - The active business is already selected. Never ask the user which business they want.
-- Booking feature flag is ${bookingEnabled ? 'ENABLED' : 'DISABLED'}.
+- Booking mode is ${bookingEnabled ? 'ENABLED' : 'DISABLED'}.
 - If booking is DISABLED, stay in CHAT-ONLY mode: answer business questions and helpful guidance, and ask the user to call the business for bookings.
 - If booking is ENABLED, you may collect booking intent conversationally, but do not invent confirmations.
 - Only use information from the provided business config.
@@ -33,7 +33,7 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
   if (!business) throw new Error('Unknown businessId.');
 
   const client = new OpenAI({ apiKey });
-  const bookingEnabled = process.env.BOOKING_ENABLED === 'true';
+  const bookingEnabled = business.bookingMode !== null && business.bookingMode !== 'request';
 
   try {
     const response = await client.responses.create({

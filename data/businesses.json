@@ -1,7 +1,7 @@
 [
   {
     "businessId": "demo_barber",
-    "name": "Downtown Fade Studio",
+    "name": "Demo Barber",
     "timezone": "America/New_York",
     "hours": {
       "monday": {
