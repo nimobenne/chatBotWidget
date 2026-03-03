@@ -3,7 +3,13 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { BookingRecord, BusinessConfig, ConversationLog, HandoffRecord } from './types';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+function resolveDataDir() {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  if (process.env.VERCEL === '1') return '/tmp/chatbotwidget-data';
+  return path.join(process.cwd(), 'data');
+}
+
+const DATA_DIR = resolveDataDir();
 const BUSINESSES_PATH = path.join(DATA_DIR, 'businesses.json');
 const BOOKINGS_PATH = path.join(DATA_DIR, 'bookings.json');
 const HANDOFFS_PATH = path.join(DATA_DIR, 'handoffs.json');
