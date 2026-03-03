@@ -17,6 +17,17 @@ function extractHost(origin: string | null): string {
   }
 }
 
+function domainAllowed(host: string, allowedDomains: string[]): boolean {
+  const normalized = host.toLowerCase();
+  return allowedDomains.some((entry) => {
+    const rule = entry.toLowerCase().trim();
+    if (!rule) return false;
+    if (rule === '*') return true;
+    if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
+    return normalized === rule;
+  });
+}
+
 function checkRateLimit(key: string, max = 20, windowMs = 60_000): boolean {
   const now = Date.now();
   const current = rateMap.get(key);
@@ -40,6 +51,8 @@ export async function POST(req: NextRequest) {
 
     const origin = req.headers.get('origin');
     const host = extractHost(origin);
+    const isSameHost = host && host === req.nextUrl.hostname;
+    if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
     if (host && !business.allowedDomains.includes(host)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
@@ -56,6 +69,7 @@ export async function POST(req: NextRequest) {
     });
 
     const res = NextResponse.json(result);
+    if (origin && host && (isSameHost || domainAllowed(host, business.allowedDomains))) {
     if (origin && host && business.allowedDomains.includes(host)) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
