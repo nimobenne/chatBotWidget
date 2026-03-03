@@ -11,7 +11,7 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
   - per-business CORS allowlist
   - input validation + sanitization
   - in-memory rate limiting (dev-safe baseline)
-  - OpenAI Responses API with tool-calling for availability and booking
+  - OpenAI Responses API for business FAQ chat (booking flow is feature-flagged)
 - File-based JSON store by default, with a DAL interface ready for Postgres implementation.
 - Basic admin UI at `/admin` with optional password protection.
 
@@ -28,12 +28,19 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
    - `OPENAI_API_KEY` (**required**)
 4. Optional:
    - `ADMIN_PASSWORD` (enables and protects admin API routes)
+   - `BOOKING_ENABLED` (`false` by default for stable chat-only demo mode)
 5. Start dev server:
    ```bash
    npm run dev
    ```
 6. Open:
    - `http://localhost:3000/demo?biz=demo_barber`
+
+
+## Demo business to test
+- Use `businessId=demo_barber` for local and Vercel testing.
+- Quick URL: `/demo?biz=demo_barber`
+- Default behavior with `BOOKING_ENABLED=false`: helpful FAQ/chat mode only.
 
 ## Embed on any website
 ```html
