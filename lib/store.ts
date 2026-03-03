@@ -88,8 +88,85 @@ class JsonDataStore implements DataStore {
   }
 }
 
+interface SupabaseBusiness {
+  id: string;
+  slug: string;
+  name: string;
+  timezone: string;
+  phone: string;
+  email: string;
+  address: string;
+  hours: Record<string, { open: string; close: string } | null>;
+  services: { name: string; durationMin: number; priceRange?: string; bufferMin?: number }[];
+  allowed_domains: string[];
+  booking_mode: string;
+  faqs: Record<string, string>;
+  policies: { cancellation: string; booking: string };
+  slot_interval_min: number;
+  buffer_min: number;
+  booking_window_days: number;
+  widget_style: { accentColor?: string };
+  created_at: string;
+  updated_at: string;
+}
+
+interface SupabaseBooking {
+  id: string;
+  business_id: string;
+  service: string;
+  start_time: string;
+  end_time: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string;
+  status: string;
+  notes: string;
+  calendar_event_id: string;
+  created_at: string;
+}
+
+interface SupabaseHandoff {
+  id: string;
+  business_id: string;
+  customer_contact: { phone?: string; email?: string };
+  summary: string;
+  created_at: string;
+  resolved_at: string | null;
+  channel: string;
+  status: string;
+  last_user_message: string;
+}
+
+interface SupabaseConversation {
+  id: string;
+  business_id: string;
+  session_id: string;
+  messages: { role: string; content: string }[];
+  last_user_message: string;
+  last_assistant_message: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function toBusinessConfig(sb: SupabaseBusiness): BusinessConfig {
+  return {
+    businessId: sb.slug,
+    name: sb.name,
+    timezone: sb.timezone,
+    hours: sb.hours,
+    services: sb.services,
+    policies: sb.policies,
+    contact: { phone: sb.phone, email: sb.email, address: sb.address },
+    faq: sb.faqs,
+    allowedDomains: sb.allowed_domains,
+    bookingMode: sb.booking_mode as 'request' | 'calendar',
+    styling: sb.widget_style
+  };
+}
+
 class SupabaseDataStore implements DataStore {
   private client;
+  private businessIdCache: Map<string, string> = new Map();
 
   constructor() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -100,62 +177,152 @@ class SupabaseDataStore implements DataStore {
     this.client = createClient(supabaseUrl, supabaseKey);
   }
 
+  private async getBusinessDbId(slug: string): Promise<string | null> {
+    if (this.businessIdCache.has(slug)) {
+      return this.businessIdCache.get(slug)!;
+    }
+    const { data, error } = await this.client
+      .from('businesses')
+      .select('id')
+      .eq('slug', slug)
+      .single();
+    if (error || !data) return null;
+    this.businessIdCache.set(slug, data.id);
+    return data.id;
+  }
+
   async listBusinesses(): Promise<BusinessConfig[]> {
     const { data, error } = await this.client.from('businesses').select('*');
     if (error) throw new Error(error.message);
-    return (data as BusinessConfig[]) || [];
+    return (data as SupabaseBusiness[]).map(toBusinessConfig);
   }
 
   async getBusinessConfig(businessId: string): Promise<BusinessConfig | null> {
     const { data, error } = await this.client
       .from('businesses')
       .select('*')
-      .eq('businessId', businessId)
+      .eq('slug', businessId)
       .single();
     if (error) return null;
-    return data as BusinessConfig;
+    return toBusinessConfig(data as SupabaseBusiness);
   }
 
   async saveBusinessConfig(business: BusinessConfig): Promise<void> {
+    const sbRecord = {
+      slug: business.businessId,
+      name: business.name,
+      timezone: business.timezone,
+      hours: business.hours,
+      services: business.services,
+      policies: business.policies,
+      phone: business.contact.phone,
+      email: business.contact.email,
+      address: business.contact.address,
+      faqs: business.faq,
+      allowed_domains: business.allowedDomains,
+      booking_mode: business.bookingMode,
+      slot_interval_min: 30,
+      buffer_min: 10,
+      booking_window_days: 30,
+      widget_style: business.styling
+    };
     const { error } = await this.client
       .from('businesses')
-      .upsert({ ...business }, { onConflict: 'businessId' });
+      .upsert(sbRecord, { onConflict: 'slug' });
     if (error) throw new Error(error.message);
   }
 
   async listBookings(businessId: string): Promise<BookingRecord[]> {
+    const businessDbId = await this.getBusinessDbId(businessId);
+    if (!businessDbId) return [];
+    
     const { data, error } = await this.client
       .from('bookings')
       .select('*')
-      .eq('businessId', businessId);
+      .eq('business_id', businessDbId);
     if (error) throw new Error(error.message);
-    return (data as BookingRecord[]) || [];
+    
+    return (data as SupabaseBooking[]).map((b) => ({
+      bookingId: b.id,
+      businessId: businessId,
+      serviceName: b.service,
+      startTimeISO: b.start_time,
+      endTimeISO: b.end_time,
+      customerName: b.customer_name,
+      customerPhone: b.customer_phone,
+      customerEmail: b.customer_email,
+      status: b.status as 'confirmed' | 'requested',
+      notes: b.notes,
+      createdAt: b.created_at
+    }));
   }
 
   async createBooking(record: Omit<BookingRecord, 'bookingId' | 'createdAt'>): Promise<BookingRecord> {
-    const booking: BookingRecord = {
-      ...record,
-      bookingId: randomUUID(),
-      createdAt: new Date().toISOString()
-    };
-    const { error } = await this.client.from('bookings').insert(booking);
+    const businessDbId = await this.getBusinessDbId(record.businessId);
+    if (!businessDbId) throw new Error('Business not found');
+    
+    const bookingDbId = randomUUID();
+    const now = new Date().toISOString();
+    const { error } = await this.client.from('bookings').insert({
+      id: bookingDbId,
+      business_id: businessDbId,
+      service: record.serviceName,
+      start_time: record.startTimeISO,
+      end_time: record.endTimeISO,
+      customer_name: record.customerName,
+      customer_phone: record.customerPhone,
+      customer_email: record.customerEmail,
+      status: record.status,
+      notes: record.notes,
+      created_at: now
+    });
     if (error) throw new Error(error.message);
-    return booking;
+    
+    return {
+      ...record,
+      bookingId: bookingDbId,
+      createdAt: now
+    };
   }
 
   async createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord> {
-    const handoff: HandoffRecord = {
-      ...record,
-      handoffId: randomUUID(),
-      createdAt: new Date().toISOString()
-    };
-    const { error } = await this.client.from('handoffs').insert(handoff);
+    const businessDbId = await this.getBusinessDbId(record.businessId);
+    if (!businessDbId) throw new Error('Business not found');
+    
+    const handoffDbId = randomUUID();
+    const now = new Date().toISOString();
+    const { error } = await this.client.from('handoffs').insert({
+      id: handoffDbId,
+      business_id: businessDbId,
+      summary: record.summary,
+      customer_contact: { phone: record.customerContact, email: '' },
+      status: 'open',
+      channel: 'chat',
+      last_user_message: record.customerContact,
+      created_at: now
+    });
     if (error) throw new Error(error.message);
-    return handoff;
+    
+    return {
+      ...record,
+      handoffId: handoffDbId,
+      createdAt: now
+    };
   }
 
   async logConversation(log: ConversationLog): Promise<void> {
-    const { error } = await this.client.from('conversations').insert(log);
+    const businessDbId = await this.getBusinessDbId(log.businessId);
+    if (!businessDbId) return;
+    
+    const now = new Date().toISOString();
+    const { error } = await this.client.from('conversations').upsert({
+      business_id: businessDbId,
+      session_id: log.sessionId,
+      last_user_message: log.userMessage,
+      last_assistant_message: log.assistantMessage,
+      updated_at: now
+    }, { onConflict: 'business_id, session_id' });
+    
     if (error) console.error('Failed to log conversation:', error.message);
   }
 }
