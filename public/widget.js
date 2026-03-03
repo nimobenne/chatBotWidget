@@ -5,6 +5,13 @@
   const businessId = script.getAttribute('data-business') || 'demo_barber';
   const position = script.getAttribute('data-position') || 'bottom-right';
   const accent = script.getAttribute('data-accent') || '#111827';
+  const apiBase = (() => {
+    try {
+      return new URL(script.src, window.location.href).origin;
+    } catch {
+      return window.location.origin;
+    }
+  })();
   const sessionKey = `ai_receptionist_session_${businessId}`;
   const sessionId = localStorage.getItem(sessionKey) || crypto.randomUUID();
   localStorage.setItem(sessionKey, sessionId);
@@ -74,7 +81,7 @@
     addMsg(message, 'u');
     send.disabled = true;
     try {
-      const res = await fetch(`${location.origin}/api/chat`, {
+      const res = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessId, sessionId, message })

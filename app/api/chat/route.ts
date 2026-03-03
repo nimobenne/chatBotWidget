@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
 
     const origin = req.headers.get('origin');
     const host = extractHost(origin);
-    if (host && !business.allowedDomains.includes(host)) {
+    if (!host) {
+      return NextResponse.json({ error: 'Origin header required' }, { status: 403 });
+    }
+    if (!business.allowedDomains.includes(host)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
@@ -56,10 +59,8 @@ export async function POST(req: NextRequest) {
     });
 
     const res = NextResponse.json(result);
-    if (origin && host && business.allowedDomains.includes(host)) {
-      res.headers.set('Access-Control-Allow-Origin', origin);
-      res.headers.set('Vary', 'Origin');
-    }
+    res.headers.set('Access-Control-Allow-Origin', origin ?? '');
+    res.headers.set('Vary', 'Origin');
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
@@ -68,10 +69,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function OPTIONS(req: NextRequest) {
-  const origin = req.headers.get('origin') || '*';
+  const origin = req.headers.get('origin');
+  const host = extractHost(origin);
+  if (!host) {
+    return new NextResponse(null, { status: 403 });
+  }
+
   const res = new NextResponse(null, { status: 204 });
-  res.headers.set('Access-Control-Allow-Origin', origin);
+  res.headers.set('Access-Control-Allow-Origin', origin ?? '');
   res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.headers.set('Vary', 'Origin');
   return res;
 }
