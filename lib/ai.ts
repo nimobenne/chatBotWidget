@@ -12,8 +12,13 @@ export function validateChatInput(payload: unknown) {
   return inputSchema.parse(payload);
 }
 
-function getSystemPrompt(businessName: string) {
-  return `You are a friendly AI receptionist for ${businessName}. Be concise and practical.
+
+function isSameBusiness(toolBusinessId: unknown, currentBusinessId: string): boolean {
+  return typeof toolBusinessId === 'string' && toolBusinessId === currentBusinessId;
+}
+
+function getSystemPrompt() {
+  return `You are a friendly AI receptionist for a local business (default demo: a barber shop). Be concise and practical.
 Rules:
 - The active business is already selected. Never ask the user which business they want.
 - Right now you are in CHAT-ONLY mode: answer business questions and give helpful guidance.
@@ -36,10 +41,82 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
   const response = await client.responses.create({
     model: 'gpt-4.1-mini',
     input: [
-      { role: 'system', content: getSystemPrompt(business.name) },
-      {
-        role: 'user',
-        content: `Business config (source of truth): ${JSON.stringify(business)}\nCustomer message: ${input.message}`
+      { role: 'system', content: getSystemPrompt() },
+      { role: 'user', content: `Business context: ${JSON.stringify(business)}\nCustomer message: ${input.message}` }
+    ],
+    tools
+  });
+
+  for (let i = 0; i < 6; i += 1) {
+    const calls = response.output.filter((item) => item.type === 'function_call');
+    if (!calls.length) break;
+    const outputs: OpenAI.Responses.ResponseInputItem[] = [];
+
+    for (const call of calls) {
+      const args = JSON.parse(call.arguments || '{}') as Record<string, unknown>;
+      let result: unknown;
+      switch (call.name) {
+        case 'getBusinessConfig':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = business;
+          break;
+        case 'listServices':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = business.services;
+          break;
+        case 'getAvailableSlots':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = await getAvailableSlots(business, String(args.serviceName), args.dateRangeISO as { start: string; end: string });
+          break;
+        case 'createBooking':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = await createBookingRecord({
+            business,
+            serviceName: String(args.serviceName),
+            startTimeISO: String(args.startTimeISO),
+            customerName: String(args.customerName),
+            customerPhone: String(args.customerPhone),
+            customerEmail: args.customerEmail ? String(args.customerEmail) : undefined,
+            status: 'confirmed'
+          });
+          break;
+        case 'requestBooking':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = await createBookingRecord({
+            business,
+            serviceName: String(args.serviceName),
+            startTimeISO: String((args.preferredDateRangeISO as { start: string }).start),
+            customerName: String(args.customerName),
+            customerPhone: String(args.customerPhone),
+            customerEmail: args.customerEmail ? String(args.customerEmail) : undefined,
+            notes: args.notes ? String(args.notes) : undefined,
+            status: 'requested'
+          });
+          break;
+        case 'handoffToOwner':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = await store.createHandoff({ businessId: input.businessId, summary: String(args.summary), customerContact: String(args.customerContact) });
+          break;
+        default:
+          result = { error: 'Unknown tool' };
       }
     ]
   });
