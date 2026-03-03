@@ -181,13 +181,7 @@ class SupabaseStore implements Store {
     if (error) throw new Error(`Failed to load business: ${error.message}`);
     if (!data) return null;
 
-    const fixed = {
-      ...data,
-      contact_phone: (data as { phone?: string | null }).phone ?? null,
-      contact_email: (data as { email?: string | null }).email ?? null
-    } as unknown as RawBusinessRow;
-
-    return normalizeBusiness(fixed);
+    return normalizeBusiness(data as unknown as RawBusinessRow);
   }
 
   async listBusinesses(): Promise<BusinessRow[]> {
