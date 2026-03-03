@@ -60,6 +60,7 @@ interface RawBusinessRow {
 export interface Store {
   getBusinessBySlug(slug: string): Promise<BusinessRow | null>;
   listBusinesses(): Promise<BusinessRow[]>;
+  getConversationMessages(business_id: string, session_id: string): Promise<Array<{ role: 'user' | 'assistant'; content: string; at: string }>>;
   upsertConversation(input: {
     business_id: string;
     session_id: string;
@@ -198,7 +199,7 @@ class SupabaseStore implements Store {
 
     if (error) throw new Error(`Failed to list businesses: ${error.message}`);
 
-    return (data || []).map((item) => {
+    return (data || []).map((item: unknown) => {
       const row = item as Record<string, unknown>;
       return normalizeBusiness({
         ...(row as unknown as RawBusinessRow),
@@ -206,6 +207,23 @@ class SupabaseStore implements Store {
         contact_email: (row.email as string | null) ?? null
       });
     });
+  }
+
+  async getConversationMessages(business_id: string, session_id: string): Promise<Array<{ role: 'user' | 'assistant'; content: string; at: string }>> {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('messages')
+      .eq('business_id', business_id)
+      .eq('session_id', session_id)
+      .maybeSingle();
+
+    if (error && !error.message.toLowerCase().includes('no rows')) {
+      throw new Error(`Failed to load conversation: ${error.message}`);
+    }
+
+    const messages = (data as { messages?: Array<{ role: 'user' | 'assistant'; content: string; at: string }> } | null)?.messages;
+    return Array.isArray(messages) ? messages : [];
   }
 
   async upsertConversation(input: {

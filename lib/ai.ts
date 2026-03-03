@@ -48,6 +48,9 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
   const business = await store.getBusinessBySlug(slug);
   if (!business) throw new Error('This chat widget is not configured. Please contact the business.');
 
+  const history = await store.getConversationMessages(business.id, input.sessionId);
+  const recentHistory = history.slice(-12);
+
   const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -140,7 +143,9 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
     tools,
     input: [
       { role: 'system', content: buildSystemPrompt(business) },
-      { role: 'user', content: `Business context: ${JSON.stringify(sanitizeBusinessInfo(business))}\nUser: ${input.message}` }
+      { role: 'system', content: `Business context: ${JSON.stringify(sanitizeBusinessInfo(business))}` },
+      ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: input.message }
     ]
   });
 

@@ -19,6 +19,30 @@ function findService(business: BusinessRow, serviceName: string) {
   return service;
 }
 
+
+function normalizeRange(dateRangeISO: { start: string; end: string }, bookingWindowDays = 14): { start: Date; end: Date } {
+  let start = new Date(dateRangeISO.start);
+  let end = new Date(dateRangeISO.end);
+
+  const invalid = Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start;
+  if (invalid) {
+    start = new Date();
+    end = new Date(start);
+    end.setDate(end.getDate() + bookingWindowDays);
+  }
+
+  if (
+    end.getHours() === 0 &&
+    end.getMinutes() === 0 &&
+    end.getSeconds() === 0 &&
+    end.getMilliseconds() === 0
+  ) {
+    end.setHours(23, 59, 59, 999);
+  }
+
+  return { start, end };
+}
+
 export async function getAvailableSlots(
   business: BusinessRow,
   serviceName: string,
@@ -26,8 +50,9 @@ export async function getAvailableSlots(
 ): Promise<string[]> {
   const store = getSupabaseStore();
   const service = findService(business, serviceName);
-  const rangeStart = new Date(dateRangeISO.start);
-  const rangeEnd = new Date(dateRangeISO.end);
+  const normalizedRange = normalizeRange(dateRangeISO);
+  const rangeStart = normalizedRange.start;
+  const rangeEnd = normalizedRange.end;
   const existing = await store.getBookingsInRange(business.id, rangeStart.toISOString(), rangeEnd.toISOString());
   const slots: string[] = [];
 
@@ -50,7 +75,7 @@ export async function getAvailableSlots(
     }
   }
 
-  return slots.slice(0, 8);
+  return Array.from(new Set(slots)).slice(0, 8);
 }
 
 export async function createBookingRecord(params: {
