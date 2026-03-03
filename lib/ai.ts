@@ -59,13 +59,17 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
 
     for (const call of calls) {
       const args = JSON.parse(call.arguments || '{}') as Record<string, unknown>;
+      const requestedBusinessId = args.businessId ? String(args.businessId) : undefined;
+      if (requestedBusinessId && requestedBusinessId !== input.businessId) {
+        throw new Error('Tool call businessId does not match authenticated business context.');
+      }
       let result: unknown;
       switch (call.name) {
         case 'getBusinessConfig':
-          result = await store.getBusinessConfig(String(args.businessId));
+          result = await store.getBusinessConfig(input.businessId);
           break;
         case 'listServices':
-          result = (await store.getBusinessConfig(String(args.businessId)))?.services ?? [];
+          result = (await store.getBusinessConfig(input.businessId))?.services ?? [];
           break;
         case 'getAvailableSlots':
           result = await getAvailableSlots(business, String(args.serviceName), args.dateRangeISO as { start: string; end: string });
