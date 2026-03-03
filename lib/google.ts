@@ -126,6 +126,7 @@ export async function createGoogleCalendarEvent(params: {
   startISO: string;
   endISO: string;
   timezone: string;
+  customerEmail?: string;
 }): Promise<string | undefined> {
   const store = getSupabaseStore();
   const conn = await store.getGoogleConnection(params.businessId);
@@ -134,7 +135,7 @@ export async function createGoogleCalendarEvent(params: {
   const accessToken = await refreshAccessToken(conn.refresh_token);
   const calendarId = conn.calendar_id || 'primary';
 
-  const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`, {
+  const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -144,11 +145,22 @@ export async function createGoogleCalendarEvent(params: {
       summary: params.summary,
       description: params.description,
       start: { dateTime: params.startISO, timeZone: params.timezone },
-      end: { dateTime: params.endISO, timeZone: params.timezone }
+      end: { dateTime: params.endISO, timeZone: params.timezone },
+      attendees: params.customerEmail ? [{ email: params.customerEmail }] : undefined,
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 24 * 60 },
+          { method: 'popup', minutes: 30 }
+        ]
+      }
     })
   });
 
-  if (!res.ok) throw new Error('Failed to create Google Calendar event.');
+  if (!res.ok) {
+    const details = await res.text();
+    throw new Error(`Failed to create Google Calendar event (${res.status}): ${details || res.statusText}`);
+  }
   const json = (await res.json()) as { id?: string };
   return json.id;
 }
