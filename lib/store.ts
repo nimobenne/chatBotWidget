@@ -166,17 +166,25 @@ export function getStore(): DataStore {
   const dataStoreType = process.env.DATA_STORE || 'json';
   
   if (dataStoreType === 'supabase') {
-    if (!singleton || !(singleton instanceof SupabaseDataStore)) {
-      singleton = new SupabaseDataStore();
+    try {
+      if (!singleton || !(singleton instanceof SupabaseDataStore)) {
+        singleton = new SupabaseDataStore();
+      }
+      return singleton;
+    } catch (err) {
+      console.warn('Supabase store failed to initialize, falling back to JSON:', err);
     }
-    return singleton;
   }
   
   if (dataStoreType === 'postgres') {
-    if (!singleton || !(singleton instanceof SupabaseDataStore)) {
-      singleton = new SupabaseDataStore();
+    try {
+      if (!singleton || !(singleton instanceof SupabaseDataStore)) {
+        singleton = new SupabaseDataStore();
+      }
+      return singleton;
+    } catch (err) {
+      console.warn('Supabase store failed to initialize, falling back to JSON:', err);
     }
-    return singleton;
   }
   
   if (!singleton || !(singleton instanceof JsonDataStore)) {
