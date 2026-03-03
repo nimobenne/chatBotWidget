@@ -13,9 +13,10 @@ export function validateChatInput(payload: unknown) {
   return inputSchema.parse(payload);
 }
 
-function getSystemPrompt() {
-  return `You are a friendly AI receptionist for a local business (default demo: a barber shop). Be concise and practical.
+function getSystemPrompt(businessName: string) {
+  return `You are a friendly AI receptionist for ${businessName}. Be concise and practical.
 Rules:
+- The active business is already selected. Never ask the user which business they want.
 - Only use information from tool outputs and supplied business config.
 - Ask only minimum required booking questions: service, preferred date/time, name, phone (email optional).
 - For bookingMode=calendar, ONLY say a booking is confirmed after createBooking succeeds.
@@ -35,18 +36,100 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
 
   const client = new OpenAI({ apiKey });
   const tools: OpenAI.Responses.Tool[] = [
-    { type: 'function', strict: true, name: 'getBusinessConfig', description: 'Get business details and FAQs', parameters: { type: 'object', properties: { businessId: { type: 'string' } }, required: ['businessId'] } },
-    { type: 'function', strict: true, name: 'listServices', description: 'List services and durations', parameters: { type: 'object', properties: { businessId: { type: 'string' } }, required: ['businessId'] } },
-    { type: 'function', strict: true, name: 'getAvailableSlots', description: 'Get appointment slots in ISO format', parameters: { type: 'object', properties: { businessId: { type: 'string' }, serviceName: { type: 'string' }, dateRangeISO: { type: 'object', properties: { start: { type: 'string' }, end: { type: 'string' } }, required: ['start', 'end'] } }, required: ['businessId', 'serviceName', 'dateRangeISO'] } },
-    { type: 'function', strict: true, name: 'createBooking', description: 'Create a confirmed booking', parameters: { type: 'object', properties: { businessId: { type: 'string' }, serviceName: { type: 'string' }, startTimeISO: { type: 'string' }, customerName: { type: 'string' }, customerPhone: { type: 'string' }, customerEmail: { type: 'string' } }, required: ['businessId', 'serviceName', 'startTimeISO', 'customerName', 'customerPhone'] } },
-    { type: 'function', strict: true, name: 'requestBooking', description: 'Create booking request when mode=request', parameters: { type: 'object', properties: { businessId: { type: 'string' }, preferredDateRangeISO: { type: 'object', properties: { start: { type: 'string' }, end: { type: 'string' } }, required: ['start', 'end'] }, serviceName: { type: 'string' }, customerName: { type: 'string' }, customerPhone: { type: 'string' }, customerEmail: { type: 'string' }, notes: { type: 'string' } }, required: ['businessId', 'preferredDateRangeISO', 'serviceName', 'customerName', 'customerPhone'] } },
-    { type: 'function', strict: true, name: 'handoffToOwner', description: 'Create owner handoff request', parameters: { type: 'object', properties: { businessId: { type: 'string' }, summary: { type: 'string' }, customerContact: { type: 'string' } }, required: ['businessId', 'summary', 'customerContact'] } }
+    {
+      type: 'function',
+      strict: true,
+      name: 'getBusinessConfig',
+      description: 'Get the active business details and FAQs',
+      parameters: { type: 'object', additionalProperties: false, properties: {}, required: [] }
+    },
+    {
+      type: 'function',
+      strict: true,
+      name: 'listServices',
+      description: 'List services and durations for the active business',
+      parameters: { type: 'object', additionalProperties: false, properties: {}, required: [] }
+    },
+    {
+      type: 'function',
+      strict: true,
+      name: 'getAvailableSlots',
+      description: 'Get appointment slots in ISO format for the active business',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          serviceName: { type: 'string' },
+          dateRangeISO: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { start: { type: 'string' }, end: { type: 'string' } },
+            required: ['start', 'end']
+          }
+        },
+        required: ['serviceName', 'dateRangeISO']
+      }
+    },
+    {
+      type: 'function',
+      strict: true,
+      name: 'createBooking',
+      description: 'Create a confirmed booking for the active business',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          serviceName: { type: 'string' },
+          startTimeISO: { type: 'string' },
+          customerName: { type: 'string' },
+          customerPhone: { type: 'string' },
+          customerEmail: { type: 'string' }
+        },
+        required: ['serviceName', 'startTimeISO', 'customerName', 'customerPhone']
+      }
+    },
+    {
+      type: 'function',
+      strict: true,
+      name: 'requestBooking',
+      description: 'Create booking request for active business when mode=request',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          preferredDateRangeISO: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { start: { type: 'string' }, end: { type: 'string' } },
+            required: ['start', 'end']
+          },
+          serviceName: { type: 'string' },
+          customerName: { type: 'string' },
+          customerPhone: { type: 'string' },
+          customerEmail: { type: 'string' },
+          notes: { type: 'string' }
+        },
+        required: ['preferredDateRangeISO', 'serviceName', 'customerName', 'customerPhone']
+      }
+    },
+    {
+      type: 'function',
+      strict: true,
+      name: 'handoffToOwner',
+      description: 'Create owner handoff request for the active business',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { summary: { type: 'string' }, customerContact: { type: 'string' } },
+        required: ['summary', 'customerContact']
+      }
+    }
   ];
 
   let response = await client.responses.create({
     model: 'gpt-4.1-mini',
     input: [
-      { role: 'system', content: getSystemPrompt() },
+      { role: 'system', content: getSystemPrompt(business.name) },
       { role: 'user', content: `Business context: ${JSON.stringify(business)}\nCustomer message: ${input.message}` }
     ],
     tools
@@ -62,10 +145,10 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
       let result: unknown;
       switch (call.name) {
         case 'getBusinessConfig':
-          result = await store.getBusinessConfig(String(args.businessId));
+          result = business;
           break;
         case 'listServices':
-          result = (await store.getBusinessConfig(String(args.businessId)))?.services ?? [];
+          result = business.services;
           break;
         case 'getAvailableSlots':
           result = await getAvailableSlots(business, String(args.serviceName), args.dateRangeISO as { start: string; end: string });
