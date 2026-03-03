@@ -13,6 +13,11 @@ export function validateChatInput(payload: unknown) {
   return inputSchema.parse(payload);
 }
 
+
+function isSameBusiness(toolBusinessId: unknown, currentBusinessId: string): boolean {
+  return typeof toolBusinessId === 'string' && toolBusinessId === currentBusinessId;
+}
+
 function getSystemPrompt() {
   return `You are a friendly AI receptionist for a local business (default demo: a barber shop). Be concise and practical.
 Rules:
@@ -62,15 +67,31 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
       let result: unknown;
       switch (call.name) {
         case 'getBusinessConfig':
-          result = await store.getBusinessConfig(String(args.businessId));
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = business;
           break;
         case 'listServices':
-          result = (await store.getBusinessConfig(String(args.businessId)))?.services ?? [];
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
+          result = business.services;
           break;
         case 'getAvailableSlots':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
           result = await getAvailableSlots(business, String(args.serviceName), args.dateRangeISO as { start: string; end: string });
           break;
         case 'createBooking':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
           result = await createBookingRecord({
             business,
             serviceName: String(args.serviceName),
@@ -82,6 +103,10 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
           });
           break;
         case 'requestBooking':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
           result = await createBookingRecord({
             business,
             serviceName: String(args.serviceName),
@@ -94,6 +119,10 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
           });
           break;
         case 'handoffToOwner':
+          if (!isSameBusiness(args.businessId, input.businessId)) {
+            result = { error: 'businessId mismatch' };
+            break;
+          }
           result = await store.createHandoff({ businessId: input.businessId, summary: String(args.summary), customerContact: String(args.customerContact) });
           break;
         default:
