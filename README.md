@@ -63,3 +63,6 @@ Admin API auth uses the `x-admin-password` header when `ADMIN_PASSWORD` is set.
 
 
 When Google Calendar is connected for a business, available slots are filtered with Google FreeBusy; otherwise internal booking records are used.
+
+
+Booking confirmations can optionally be emailed to customers when `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are set.

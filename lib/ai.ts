@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import { createHandoffAndAlert } from './alerts';
-import { createBookingRecord, getAvailableSlots } from './booking';
+import { createHandoffAndAlert, sendBookingConfirmationEmail } from './alerts';
+import { calculateBookingTimes, createBookingRecord, getAvailableSlots } from './booking';
 import { createGoogleCalendarEvent } from './google';
 import { BusinessRow, getSupabaseStore } from './store.supabase';
 
@@ -36,7 +36,19 @@ function sanitizeBusinessInfo(business: BusinessRow) {
 }
 
 function buildSystemPrompt(business: BusinessRow) {
-  return `You are a friendly AI receptionist for ${business.name}.\nRules:\n- Never ask which business this is; it is already selected.\n- Start in normal conversational mode: answer questions naturally without forcing a booking flow.\n- Only switch to booking flow when the user clearly asks to book/reschedule/cancel.\n- In booking flow, ask one question at a time and collect only what is needed (service, date/time, name, phone; email is optional).\n- Use tools for availability, booking, and handoff.\n- Only confirm a booking after createBooking succeeds.\n- If unsure or unable to fulfill, use handoffToOwner.\n- Keep replies concise and helpful.`;
+  return `You are a friendly AI receptionist for ${business.name}.
+Rules:
+- Never ask which business this is; it is already selected.
+- Start in normal conversational mode: answer questions naturally without forcing a booking flow.
+- Only switch to booking flow when the user clearly asks to book/reschedule/cancel.
+- In booking flow, collect only service, date/time, customer name and customer email.
+- Never ask for a phone number.
+- Before confirming a booking, read back the email address and ask for explicit confirmation.
+- Call createBooking only after the user confirms the email is correct.
+- Use tools for availability, booking, and handoff.
+- Only confirm a booking after createBooking succeeds.
+- If unsure or unable to fulfill, use handoffToOwner.
+- Keep replies concise and helpful.`;
 }
 
 export async function runAssistant(input: { businessId?: string; sessionId: string; message: string }) {
@@ -85,7 +97,7 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
     {
       type: 'function',
       name: 'createBooking',
-      description: 'Create a confirmed booking',
+      description: 'Create a confirmed booking after customer confirms their email address',
       strict: false,
       parameters: {
         type: 'object',
@@ -93,10 +105,10 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
           serviceName: { type: 'string' },
           startTimeISO: { type: 'string' },
           customerName: { type: 'string' },
-          customerPhone: { type: 'string' },
-          customerEmail: { type: 'string' }
+          customerEmail: { type: 'string' },
+          emailConfirmed: { type: 'boolean' }
         },
-        required: ['serviceName', 'startTimeISO', 'customerName', 'customerPhone', 'customerEmail'],
+        required: ['serviceName', 'startTimeISO', 'customerName', 'customerEmail', 'emailConfirmed'],
         additionalProperties: false
       }
     },
@@ -116,11 +128,10 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
           },
           serviceName: { type: 'string' },
           customerName: { type: 'string' },
-          customerPhone: { type: 'string' },
           customerEmail: { type: 'string' },
           notes: { type: 'string' }
         },
-        required: ['preferredDateRangeISO', 'serviceName', 'customerName', 'customerPhone', 'customerEmail', 'notes'],
+        required: ['preferredDateRangeISO', 'serviceName', 'customerName', 'customerEmail', 'notes'],
         additionalProperties: false
       }
     },
@@ -157,49 +168,78 @@ export async function runAssistant(input: { businessId?: string; sessionId: stri
     const toolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
 
     for (const call of calls) {
-      const args = JSON.parse(call.arguments || '{}') as Record<string, any>;
+      const args = JSON.parse(call.arguments || '{}') as Record<string, unknown>;
       try {
         let result: unknown;
         if (call.name === 'getBusinessInfo') {
           result = sanitizeBusinessInfo(business);
         } else if (call.name === 'getAvailableSlots') {
-          result = await getAvailableSlots(business, String(args.serviceName || ''), args.dateRangeISO);
+          result = await getAvailableSlots(
+            business,
+            String(args.serviceName || ''),
+            (args.dateRangeISO || { start: new Date().toISOString(), end: new Date().toISOString() }) as { start: string; end: string }
+          );
         } else if (call.name === 'createBooking') {
-          try {
-            const booking = await createBookingRecord({
-              business,
-              serviceName: String(args.serviceName || ''),
-              startTimeISO: String(args.startTimeISO || ''),
-              customerName: String(args.customerName || ''),
-              customerPhone: String(args.customerPhone || ''),
-              customerEmail: args.customerEmail ? String(args.customerEmail) : undefined,
-              status: 'confirmed'
-            });
-            const eventId = await createGoogleCalendarEvent({
-              businessId: business.id,
-              summary: `${booking.service} - ${booking.customer_name}`,
-              description: `Phone: ${booking.customer_phone}`,
-              startISO: booking.start_time,
-              endISO: booking.end_time,
-              timezone: business.timezone
-            });
-            result = { bookingId: booking.id, confirmedTime: booking.start_time, calendarEventId: eventId ?? null };
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown booking error';
-            if (message.toLowerCase().includes('overlap') || message.toLowerCase().includes('conflict')) {
-              result = { error: 'slot_taken', message: 'That slot is no longer available. Please choose another option.' };
-            } else {
-              result = { error: 'booking_failed', message };
+          if (args.emailConfirmed !== true) {
+            result = {
+              error: 'email_not_confirmed',
+              message: `Please confirm this email first: ${String(args.customerEmail || '')}`
+            };
+          } else {
+            try {
+              const serviceName = String(args.serviceName || '');
+              const startTimeISO = String(args.startTimeISO || '');
+              const customerName = String(args.customerName || '');
+              const customerEmail = String(args.customerEmail || '');
+
+              const times = calculateBookingTimes({ business, serviceName, startTimeISO });
+              const eventId = await createGoogleCalendarEvent({
+                businessId: business.id,
+                summary: `${serviceName} - ${customerName}`,
+                description: `Email: ${customerEmail}`,
+                startISO: times.startISO,
+                endISO: times.endISO,
+                timezone: business.timezone
+              });
+
+              const booking = await createBookingRecord({
+                business,
+                serviceName,
+                startTimeISO,
+                customerName,
+                customerEmail,
+                customerPhone: 'not_provided',
+                status: 'confirmed',
+                calendarEventId: eventId
+              });
+
+              await sendBookingConfirmationEmail({
+                business,
+                customerName,
+                customerEmail,
+                serviceName,
+                startTimeISO: booking.start_time,
+                bookingId: booking.id
+              });
+
+              result = { bookingId: booking.id, confirmedTime: booking.start_time, calendarEventId: eventId ?? null };
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown booking error';
+              if (message.toLowerCase().includes('overlap') || message.toLowerCase().includes('conflict')) {
+                result = { error: 'slot_taken', message: 'That slot is no longer available. Please choose another option.' };
+              } else {
+                result = { error: 'booking_failed', message };
+              }
             }
           }
         } else if (call.name === 'requestBooking') {
           const booking = await createBookingRecord({
             business,
             serviceName: String(args.serviceName || ''),
-            startTimeISO: String(args.preferredDateRangeISO?.start || ''),
+            startTimeISO: String((args.preferredDateRangeISO as { start?: string } | undefined)?.start || ''),
             customerName: String(args.customerName || ''),
-            customerPhone: String(args.customerPhone || ''),
             customerEmail: args.customerEmail ? String(args.customerEmail) : undefined,
+            customerPhone: 'not_provided',
             status: 'requested',
             notes: args.notes ? String(args.notes) : undefined
           });

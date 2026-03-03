@@ -42,3 +42,46 @@ export async function createHandoffAndAlert(params: {
 
   return { emailed: true };
 }
+
+export async function sendBookingConfirmationEmail(params: {
+  business: BusinessRow;
+  customerName: string;
+  customerEmail: string;
+  serviceName: string;
+  startTimeISO: string;
+  bookingId: string;
+}) {
+  const from = process.env.ALERT_FROM_EMAIL;
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!from || !resendKey) return { emailed: false };
+
+  const when = new Date(params.startTimeISO).toLocaleString('en-US', {
+    timeZone: params.business.timezone,
+    dateStyle: 'full',
+    timeStyle: 'short'
+  });
+
+  const html = `<p>Hi ${params.customerName},</p>
+  <p>Your booking is confirmed.</p>
+  <p><strong>Business:</strong> ${params.business.name}<br/>
+  <strong>Service:</strong> ${params.serviceName}<br/>
+  <strong>Time:</strong> ${when}<br/>
+  <strong>Booking ID:</strong> ${params.bookingId}</p>
+  <p>If you need to make changes, reply to this email.</p>`;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from,
+      to: [params.customerEmail],
+      subject: `Booking confirmed - ${params.business.name}`,
+      html
+    })
+  });
+
+  return { emailed: response.ok };
+}

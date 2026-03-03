@@ -43,13 +43,28 @@ function normalizeRange(dateRangeISO: { start: string; end: string }, bookingWin
   return { start, end };
 }
 
+export function calculateBookingTimes(params: {
+  business: BusinessRow;
+  serviceName: string;
+  startTimeISO: string;
+}): { startISO: string; endISO: string } {
+  const service = findService(params.business, params.serviceName);
+  const start = new Date(params.startTimeISO);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error('Invalid start time provided.');
+  }
+  const end = new Date(start);
+  end.setMinutes(end.getMinutes() + service.duration_min + (service.buffer_min ?? 0));
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
 export async function getAvailableSlots(
   business: BusinessRow,
   serviceName: string,
   dateRangeISO: { start: string; end: string }
 ): Promise<string[]> {
   const store = getSupabaseStore();
-  const service = findService(business, serviceName);
+  findService(business, serviceName);
   const normalizedRange = normalizeRange(dateRangeISO);
   const rangeStart = normalizedRange.start;
   const rangeEnd = normalizedRange.end;
@@ -78,12 +93,16 @@ export async function getAvailableSlots(
 
     for (let cursor = new Date(open); cursor < close; cursor.setMinutes(cursor.getMinutes() + step)) {
       const start = new Date(cursor);
-      const end = new Date(start);
-      end.setMinutes(end.getMinutes() + service.duration_min + (service.buffer_min ?? 0));
+      const end = calculateBookingTimes({
+        business,
+        serviceName,
+        startTimeISO: start.toISOString()
+      }).endISO;
+      const endDate = new Date(end);
 
-      if (end > close || start < rangeStart || start > rangeEnd) continue;
-      const hasLocalConflict = existing.some((b) => overlaps(start, end, new Date(b.start_time), new Date(b.end_time)));
-      const hasGoogleConflict = googleBusy.some((busy) => overlaps(start, end, new Date(busy.start), new Date(busy.end)));
+      if (endDate > close || start < rangeStart || start > rangeEnd) continue;
+      const hasLocalConflict = existing.some((b) => overlaps(start, endDate, new Date(b.start_time), new Date(b.end_time)));
+      const hasGoogleConflict = googleBusy.some((busy) => overlaps(start, endDate, new Date(busy.start), new Date(busy.end)));
       if (!hasLocalConflict && !hasGoogleConflict) slots.push(start.toISOString());
     }
   }
@@ -96,25 +115,26 @@ export async function createBookingRecord(params: {
   serviceName: string;
   startTimeISO: string;
   customerName: string;
-  customerPhone: string;
+  customerPhone?: string;
   customerEmail?: string;
   status: 'confirmed' | 'requested';
   notes?: string;
   calendarEventId?: string;
 }) {
   const store = getSupabaseStore();
-  const service = findService(params.business, params.serviceName);
-  const start = new Date(params.startTimeISO);
-  const end = new Date(start);
-  end.setMinutes(end.getMinutes() + service.duration_min + (service.buffer_min ?? 0));
+  const { startISO, endISO } = calculateBookingTimes({
+    business: params.business,
+    serviceName: params.serviceName,
+    startTimeISO: params.startTimeISO
+  });
 
   return store.createBooking({
     business_id: params.business.id,
     service: params.serviceName,
-    start_time: start.toISOString(),
-    end_time: end.toISOString(),
+    start_time: startISO,
+    end_time: endISO,
     customer_name: params.customerName,
-    phone: params.customerPhone,
+    phone: params.customerPhone || 'not_provided',
     email: params.customerEmail,
     status: params.status,
     notes: params.notes,
