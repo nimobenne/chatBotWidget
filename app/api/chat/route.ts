@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
     const host = extractHost(origin);
     const isSameHost = host && host === req.nextUrl.hostname;
     if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
-    if (host && !business.allowedDomains.includes(host)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
@@ -70,7 +69,6 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json(result);
     if (origin && host && (isSameHost || domainAllowed(host, business.allowedDomains))) {
-    if (origin && host && business.allowedDomains.includes(host)) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
     }
@@ -81,11 +79,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function OPTIONS(req: NextRequest) {
+export const OPTIONS = async (req: NextRequest) => {
   const origin = req.headers.get('origin') || '*';
   const res = new NextResponse(null, { status: 204 });
   res.headers.set('Access-Control-Allow-Origin', origin);
   res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
   return res;
-}
+};
