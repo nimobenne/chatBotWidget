@@ -76,7 +76,6 @@
     send.disabled = true;
     try {
       const res = await fetch(`${apiBase}/api/chat`, {
-      const res = await fetch(`${location.origin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessId, sessionId, message })
