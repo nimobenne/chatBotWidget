@@ -49,6 +49,18 @@
         "priceRange": "$20-$30",
         "bufferMin": 5
       }
+      "monday": { "open": "09:00", "close": "18:00" },
+      "tuesday": { "open": "09:00", "close": "18:00" },
+      "wednesday": { "open": "09:00", "close": "18:00" },
+      "thursday": { "open": "09:00", "close": "19:00" },
+      "friday": { "open": "09:00", "close": "19:00" },
+      "saturday": { "open": "10:00", "close": "16:00" },
+      "sunday": null
+    },
+    "services": [
+      { "name": "Classic Haircut", "durationMin": 30, "priceRange": "$30-$40", "bufferMin": 10 },
+      { "name": "Skin Fade", "durationMin": 45, "priceRange": "$40-$55", "bufferMin": 10 },
+      { "name": "Beard Trim", "durationMin": 20, "priceRange": "$20-$30", "bufferMin": 5 }
     ],
     "policies": {
       "cancellation": "Please provide at least 12 hours notice for cancellations.",
@@ -72,5 +84,8 @@
     "styling": {
       "accentColor": "#111827"
     }
+    "allowedDomains": ["localhost", "127.0.0.1"],
+    "bookingMode": "calendar",
+    "styling": { "accentColor": "#111827" }
   }
 ]

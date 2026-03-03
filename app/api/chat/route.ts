@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     const host = extractHost(origin);
     const isSameHost = host && host === req.nextUrl.hostname;
     if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
+    if (host && !business.allowedDomains.includes(host)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json(result);
     if (origin && host && (isSameHost || domainAllowed(host, business.allowedDomains))) {
+    if (origin && host && business.allowedDomains.includes(host)) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
     }
