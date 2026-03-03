@@ -60,3 +60,6 @@ Business resolution order in widget:
 
 
 Admin API auth uses the `x-admin-password` header when `ADMIN_PASSWORD` is set.
+
+
+When Google Calendar is connected for a business, available slots are filtered with Google FreeBusy; otherwise internal booking records are used.

@@ -90,6 +90,35 @@ export async function exchangeCodeForTokens(code: string): Promise<{ refreshToke
   return { refreshToken: json.refresh_token };
 }
 
+export async function fetchGoogleBusyRanges(params: { businessId: string; startISO: string; endISO: string }) {
+  const store = getSupabaseStore();
+  const conn = await store.getGoogleConnection(params.businessId);
+  if (!conn) return [] as Array<{ start: string; end: string }>;
+
+  const accessToken = await refreshAccessToken(conn.refresh_token);
+  const calendarId = conn.calendar_id || 'primary';
+
+  const res = await fetch(`${GOOGLE_CALENDAR_API}/freeBusy`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      timeMin: params.startISO,
+      timeMax: params.endISO,
+      items: [{ id: calendarId }]
+    })
+  });
+
+  if (!res.ok) throw new Error('Failed to load Google Calendar free/busy.');
+  const json = (await res.json()) as {
+    calendars?: Record<string, { busy?: Array<{ start: string; end: string }> }>;
+  };
+
+  return json.calendars?.[calendarId]?.busy || [];
+}
+
 export async function createGoogleCalendarEvent(params: {
   businessId: string;
   summary: string;

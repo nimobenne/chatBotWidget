@@ -1,3 +1,4 @@
+import { fetchGoogleBusyRanges } from './google';
 import { BusinessRow, getSupabaseStore } from './store.supabase';
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -18,7 +19,6 @@ function findService(business: BusinessRow, serviceName: string) {
   if (!service) throw new Error(`Unknown service: ${serviceName}`);
   return service;
 }
-
 
 function normalizeRange(dateRangeISO: { start: string; end: string }, bookingWindowDays = 14): { start: Date; end: Date } {
   let start = new Date(dateRangeISO.start);
@@ -53,7 +53,19 @@ export async function getAvailableSlots(
   const normalizedRange = normalizeRange(dateRangeISO);
   const rangeStart = normalizedRange.start;
   const rangeEnd = normalizedRange.end;
+
   const existing = await store.getBookingsInRange(business.id, rangeStart.toISOString(), rangeEnd.toISOString());
+  let googleBusy: Array<{ start: string; end: string }> = [];
+  try {
+    googleBusy = await fetchGoogleBusyRanges({
+      businessId: business.id,
+      startISO: rangeStart.toISOString(),
+      endISO: rangeEnd.toISOString()
+    });
+  } catch {
+    // If Google is not connected or freebusy fails, fallback to internal bookings only.
+  }
+
   const slots: string[] = [];
 
   for (let day = new Date(rangeStart); day <= rangeEnd; day.setDate(day.getDate() + 1)) {
@@ -70,8 +82,9 @@ export async function getAvailableSlots(
       end.setMinutes(end.getMinutes() + service.duration_min + (service.buffer_min ?? 0));
 
       if (end > close || start < rangeStart || start > rangeEnd) continue;
-      const hasConflict = existing.some((b) => overlaps(start, end, new Date(b.start_time), new Date(b.end_time)));
-      if (!hasConflict) slots.push(start.toISOString());
+      const hasLocalConflict = existing.some((b) => overlaps(start, end, new Date(b.start_time), new Date(b.end_time)));
+      const hasGoogleConflict = googleBusy.some((busy) => overlaps(start, end, new Date(busy.start), new Date(busy.end)));
+      if (!hasLocalConflict && !hasGoogleConflict) slots.push(start.toISOString());
     }
   }
 
