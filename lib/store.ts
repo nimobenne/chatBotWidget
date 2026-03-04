@@ -459,8 +459,15 @@ class SupabaseDataStore implements DataStore {
 let singleton: DataStore | null = null;
 
 export function getStore(): DataStore {
-  const dataStoreType = process.env.DATA_STORE || 'json';
+  const rawStoreType = process.env.DATA_STORE || 'json';
+  const dataStoreType = rawStoreType.trim().toLowerCase().replace(/^['"]|['"]$/g, '');
   const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+
+  if (rawStoreType && dataStoreType !== 'json' && dataStoreType !== 'supabase' && dataStoreType !== 'postgres') {
+    const msg = `Unsupported DATA_STORE value: ${rawStoreType}`;
+    if (isProd) throw new Error(msg);
+    console.warn(msg);
+  }
   
   if (dataStoreType === 'supabase') {
     try {
