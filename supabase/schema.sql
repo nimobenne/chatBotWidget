@@ -2,53 +2,79 @@
 
 -- Businesses table
 CREATE TABLE IF NOT EXISTS businesses (
-  businessId TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   timezone TEXT NOT NULL DEFAULT 'America/New_York',
   hours JSONB NOT NULL DEFAULT '{}',
   services JSONB NOT NULL DEFAULT '[]',
   policies JSONB NOT NULL DEFAULT '{"cancellation": "", "booking": ""}',
-  contact JSONB NOT NULL DEFAULT '{}',
-  faq JSONB,
-  allowedDomains JSONB NOT NULL DEFAULT '[]',
-  bookingMode TEXT NOT NULL DEFAULT 'request',
-  styling JSONB,
-  createdAt TIMESTAMPTZ DEFAULT NOW(),
-  updatedAt TIMESTAMPTZ DEFAULT NOW()
+  phone TEXT DEFAULT '',
+  email TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  faqs JSONB,
+  allowed_domains JSONB NOT NULL DEFAULT '[]',
+  booking_mode TEXT NOT NULL DEFAULT 'request',
+  widget_style JSONB,
+  slot_interval_min INTEGER DEFAULT 30,
+  buffer_min INTEGER DEFAULT 10,
+  booking_window_days INTEGER DEFAULT 30,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Bookings table
 CREATE TABLE IF NOT EXISTS bookings (
-  bookingId TEXT PRIMARY KEY,
-  businessId TEXT NOT NULL REFERENCES businesses(businessId),
-  serviceName TEXT NOT NULL,
-  startTimeISO TEXT NOT NULL,
-  endTimeISO TEXT NOT NULL,
-  customerName TEXT NOT NULL,
-  customerPhone TEXT NOT NULL,
-  customerEmail TEXT,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id),
+  service TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  customer_email TEXT,
   status TEXT NOT NULL DEFAULT 'requested',
   notes TEXT,
-  createdAt TIMESTAMPTZ DEFAULT NOW()
+  calendar_event_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Handoffs table
 CREATE TABLE IF NOT EXISTS handoffs (
-  handoffId TEXT PRIMARY KEY,
-  businessId TEXT NOT NULL REFERENCES businesses(businessId),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id),
+  customer_contact JSONB NOT NULL DEFAULT '{}',
   summary TEXT NOT NULL,
-  customerContact TEXT NOT NULL,
-  createdAt TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  channel TEXT DEFAULT 'chat',
+  status TEXT DEFAULT 'open',
+  last_user_message TEXT
 );
 
 -- Conversations table
 CREATE TABLE IF NOT EXISTS conversations (
-  id SERIAL PRIMARY KEY,
-  businessId TEXT NOT NULL REFERENCES businesses(businessId),
-  sessionId TEXT NOT NULL,
-  userMessage TEXT NOT NULL,
-  assistantMessage TEXT NOT NULL,
-  createdAt TIMESTAMPTZ DEFAULT NOW()
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id),
+  session_id TEXT NOT NULL,
+  messages JSONB NOT NULL DEFAULT '[]',
+  last_user_message TEXT,
+  last_assistant_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(business_id, session_id)
+);
+
+-- Google Calendar Connections table
+CREATE TABLE IF NOT EXISTS google_calendar_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID UNIQUE NOT NULL REFERENCES businesses(id),
+  calendar_id TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  token_type TEXT,
+  scope TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Enable RLS
@@ -56,11 +82,12 @@ ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE handoffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE google_calendar_connections ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read on businesses
 CREATE POLICY "Public businesses read" ON businesses FOR SELECT USING (true);
 
--- Allow public insert on bookings (you may want to restrict this)
+-- Allow public insert on bookings
 CREATE POLICY "Public bookings insert" ON bookings FOR INSERT WITH CHECK (true);
 
 -- Allow public insert on handoffs
@@ -68,3 +95,6 @@ CREATE POLICY "Public handoffs insert" ON handoffs FOR INSERT WITH CHECK (true);
 
 -- Allow public insert on conversations
 CREATE POLICY "Public conversations insert" ON conversations FOR INSERT WITH CHECK (true);
+
+-- Allow public read/write on google_calendar_connections
+CREATE POLICY "Public google_calendar_connections all" ON google_calendar_connections FOR ALL USING (true) WITH CHECK (true);
