@@ -163,7 +163,7 @@ export default function OwnerPage() {
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
-        setMsg(`Calendar disconnected for ${selectedBusinessId}.`);
+        setMsg(data.message || `Calendar disconnected for ${selectedBusinessId}.`);
       })
       .catch((e) => setMsg(String(e.message || e)));
   }

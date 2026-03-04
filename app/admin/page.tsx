@@ -291,7 +291,7 @@ export default function AdminPage() {
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
-        setMessage(`Calendar disconnected for ${form.businessId}.`);
+        setMessage(data.message || `Calendar disconnected for ${form.businessId}.`);
       })
       .catch((e) => setMessage(String(e.message || e)));
   }

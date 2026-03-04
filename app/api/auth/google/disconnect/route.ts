@@ -30,8 +30,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await getStore().removeGoogleCalendarConnection(businessId);
-    return NextResponse.json({ ok: true });
+    const store = getStore();
+    const existing = await store.getGoogleCalendarConnection(businessId);
+    if (!existing) {
+      return NextResponse.json({ ok: true, revoked: false, disconnected: false, message: 'No connected calendar found.' });
+    }
+
+    let revoked = false;
+    let revokeError = '';
+    try {
+      const body = new URLSearchParams({ token: existing.refreshToken });
+      const res = await fetch('https://oauth2.googleapis.com/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      });
+      revoked = res.ok;
+      if (!res.ok) {
+        revokeError = `Google revoke failed (${res.status})`;
+      }
+    } catch (error) {
+      revokeError = error instanceof Error ? error.message : 'Google revoke failed';
+    }
+
+    await store.removeGoogleCalendarConnection(businessId);
+    const message = revoked
+      ? `Calendar disconnected and Google access revoked for ${businessId}.`
+      : `Calendar disconnected for ${businessId}, but Google revoke did not confirm success.${revokeError ? ` ${revokeError}` : ''}`;
+    return NextResponse.json({ ok: true, revoked, disconnected: true, message });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     return NextResponse.json({ error: message }, { status: 400 });
