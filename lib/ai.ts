@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getStore } from './store';
 import { getAvailableSlots, createBookingRecord } from './booking';
 import { createCalendarEvent } from './calendar';
+import { sendBookingConfirmation } from './email';
 
 const inputSchema = z.object({
   businessId: z.string().min(1),
@@ -171,6 +172,20 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
               await createCalendarEvent(booking, business);
             } catch (calError) {
               console.error('Calendar event creation failed:', calError);
+            }
+
+            try {
+              await sendBookingConfirmation({
+                to: args.customerEmail,
+                customerName: args.customerName,
+                serviceName: args.serviceName,
+                dateTime: dateTime,
+                businessName: business.name,
+                businessAddress: business.contact.address,
+                businessPhone: business.contact.phone
+              });
+            } catch (emailError) {
+              console.error('Email sending failed:', emailError);
             }
 
             const formattedDate = new Date(dateTime).toLocaleDateString('en-US', { 
