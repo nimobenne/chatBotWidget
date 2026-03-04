@@ -1,6 +1,7 @@
 import { getStore } from './store';
 import { BookingRecord, BusinessConfig, Service } from './types';
 import { createCalendarEvent } from './calendar';
+import { getCalendarBusyRanges } from './calendar';
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -27,6 +28,7 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
   const store = getStore();
   const service = findService(business, serviceName);
   const existing = await store.listBookings(business.businessId);
+  const busyInCalendar = await getCalendarBusyRanges(business, dateRangeISO.start, dateRangeISO.end);
   const rangeStart = new Date(dateRangeISO.start);
   const rangeEnd = new Date(dateRangeISO.end);
   const slots: string[] = [];
@@ -42,7 +44,9 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + service.durationMin + (service.bufferMin ?? 0));
       if (end > close || start < rangeStart || start > rangeEnd) continue;
-      const hasConflict = existing.some((b: BookingRecord) => overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
+      const bookingConflict = existing.some((b: BookingRecord) => overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
+      const calendarConflict = busyInCalendar.some((b) => overlaps(start, end, new Date(b.startISO), new Date(b.endISO)));
+      const hasConflict = bookingConflict || calendarConflict;
       if (!hasConflict) slots.push(start.toISOString());
     }
   }

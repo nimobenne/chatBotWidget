@@ -11,6 +11,61 @@ export interface CalendarEventResult {
   htmlLink: string;
 }
 
+export interface BusyRange {
+  startISO: string;
+  endISO: string;
+}
+
+function getOAuthClient(refreshToken: string, tokenType: string, scope: string) {
+  const oauth2Client = new google.auth.OAuth2(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: refreshToken,
+    token_type: tokenType,
+    scope
+  });
+
+  return oauth2Client;
+}
+
+export async function getCalendarBusyRanges(
+  business: BusinessConfig,
+  startISO: string,
+  endISO: string
+): Promise<BusyRange[]> {
+  const store = getStore();
+  const calendarConn = await store.getGoogleCalendarConnection(business.businessId);
+  if (!calendarConn) return [];
+
+  try {
+    const auth = getOAuthClient(calendarConn.refreshToken, calendarConn.tokenType, calendarConn.scope);
+    const calendar = google.calendar({ version: 'v3', auth });
+    const response = await calendar.events.list({
+      calendarId: calendarConn.calendarId || 'primary',
+      timeMin: startISO,
+      timeMax: endISO,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 2500
+    });
+
+    const events = response.data.items || [];
+    return events
+      .filter((e) => !!e.start?.dateTime && !!e.end?.dateTime)
+      .map((e) => ({
+        startISO: e.start?.dateTime as string,
+        endISO: e.end?.dateTime as string
+      }));
+  } catch (error) {
+    console.error('Failed to fetch Google Calendar events for busy ranges:', error);
+    return [];
+  }
+}
+
 export async function createCalendarEvent(
   booking: BookingRecord,
   business: BusinessConfig
@@ -23,19 +78,8 @@ export async function createCalendarEvent(
     return null;
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI
-  );
-
-  oauth2Client.setCredentials({
-    refresh_token: calendarConn.refreshToken,
-    token_type: calendarConn.tokenType,
-    scope: calendarConn.scope
-  });
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  const auth = getOAuthClient(calendarConn.refreshToken, calendarConn.tokenType, calendarConn.scope);
+  const calendar = google.calendar({ version: 'v3', auth });
 
   const event = {
     summary: `${booking.serviceName} - ${booking.customerName}`,
