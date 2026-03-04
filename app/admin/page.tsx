@@ -50,7 +50,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!password) return;
-    fetch(`/api/businesses?password=${encodeURIComponent(password)}`)
+    fetch('/api/businesses', { headers: { 'x-admin-password': password } })
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed to load businesses');
@@ -133,7 +133,9 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       setMessage('Business saved.');
-      const refreshed = await fetch(`/api/businesses?password=${encodeURIComponent(password)}`).then((r) => r.json());
+      const refreshed = await fetch('/api/businesses', {
+        headers: { 'x-admin-password': password }
+      }).then((r) => r.json());
       setBusinesses(refreshed.businesses || []);
       setSelectedBusinessId(form.businessId);
     } catch (e) {
@@ -157,8 +159,15 @@ export default function AdminPage() {
       setMessage('Set admin password and business id first.');
       return;
     }
-    const url = `/api/auth/google/start?businessId=${encodeURIComponent(form.businessId)}&password=${encodeURIComponent(password)}`;
-    window.location.href = url;
+    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(form.businessId)}&mode=url`, {
+      headers: { 'x-admin-password': password }
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
+        window.location.href = data.url;
+      })
+      .catch((e) => setMessage(String(e.message || e)));
   }
 
   return (

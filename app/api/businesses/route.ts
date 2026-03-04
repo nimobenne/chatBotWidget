@@ -8,7 +8,9 @@ function adminPassword(): string {
 
 function authed(req: NextRequest): boolean {
   const pwd = adminPassword();
-  const provided = req.headers.get('x-admin-password') || req.nextUrl.searchParams.get('password');
+  const headerPwd = req.headers.get('x-admin-password');
+  const queryPwd = process.env.NODE_ENV === 'production' ? null : req.nextUrl.searchParams.get('password');
+  const provided = headerPwd || queryPwd;
   return provided === pwd;
 }
 

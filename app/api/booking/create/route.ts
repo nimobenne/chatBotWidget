@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { getStore } from '@/lib/store';
 import { createBookingRecord } from '@/lib/booking';
 import { sendBookingConfirmation } from '@/lib/email';
+import { getRequestContext, extractOriginHost } from '@/lib/observability';
+import { verifyWidgetToken } from '@/lib/widgetToken';
 
 const schema = z.object({
   businessId: z.string().min(1),
@@ -14,6 +16,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const ctx = getRequestContext(req, 'POST /api/booking/create');
   try {
     const parsed = schema.parse(await req.json());
     const store = getStore();
@@ -23,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     const origin = req.headers.get('origin');
-    const host = origin ? new URL(origin).hostname : '';
+    const host = extractOriginHost(req);
     const isSameHost = host && host === req.nextUrl.hostname;
     const isAllowed = host && business.allowedDomains.some((d) => {
       const rule = d.toLowerCase().trim();
@@ -34,7 +37,15 @@ export async function POST(req: NextRequest) {
       return normalized === rule;
     });
     if (host && !isSameHost && !isAllowed) {
+      ctx.log('warn', 'Origin blocked', { businessId: parsed.businessId, host });
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+    }
+
+    const token = req.headers.get('x-widget-token');
+    const tokenCheck = verifyWidgetToken(token, { businessId: parsed.businessId, host: host || req.nextUrl.hostname });
+    if (!tokenCheck.ok) {
+      ctx.log('warn', 'Widget token rejected', { businessId: parsed.businessId, reason: tokenCheck.reason });
+      return NextResponse.json({ error: `Unauthorized widget request: ${tokenCheck.reason}` }, { status: 401 });
     }
 
     const booking = await createBookingRecord({
@@ -66,9 +77,11 @@ export async function POST(req: NextRequest) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
     }
+    ctx.log('info', 'Booking created', { businessId: parsed.businessId, bookingId: booking.bookingId, serviceName: parsed.serviceName });
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
+    ctx.log('error', 'Booking creation failed', { error: message });
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

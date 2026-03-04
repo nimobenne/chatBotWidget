@@ -6,7 +6,9 @@ import { requireOwner } from '@/lib/ownerAuth';
 
 function authed(req: NextRequest): boolean {
   const pwd = process.env.ADMIN_PASSWORD || 'password';
-  const provided = req.headers.get('x-admin-password') || req.nextUrl.searchParams.get('password');
+  const headerPwd = req.headers.get('x-admin-password');
+  const queryPwd = process.env.NODE_ENV === 'production' ? null : req.nextUrl.searchParams.get('password');
+  const provided = headerPwd || queryPwd;
   return provided === pwd;
 }
 
@@ -46,7 +48,10 @@ export async function GET(req: NextRequest) {
 
     const nonce = randomUUID();
     const authUrl = getGoogleAuthUrl(businessId, nonce);
-    const res = NextResponse.redirect(authUrl);
+    const mode = req.nextUrl.searchParams.get('mode') || '';
+    const res = mode === 'url'
+      ? NextResponse.json({ url: authUrl })
+      : NextResponse.redirect(authUrl);
     res.cookies.set('google_oauth_state', nonce, {
       httpOnly: true,
       sameSite: 'lax',

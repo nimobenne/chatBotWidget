@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { BookingRecord, BusinessConfig, ConversationLog, HandoffRecord } from './types';
+import { normalizeStoreMode } from './config';
 
 const DATA_DIR = process.cwd() + '/data';
 const BUSINESSES_PATH = DATA_DIR + '/businesses.json';
@@ -460,10 +461,10 @@ let singleton: DataStore | null = null;
 
 export function getStore(): DataStore {
   const rawStoreType = process.env.DATA_STORE || 'json';
-  const dataStoreType = rawStoreType.trim().toLowerCase().replace(/^['"]|['"]$/g, '');
+  const dataStoreType = normalizeStoreMode(rawStoreType);
   const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
 
-  if (rawStoreType && dataStoreType !== 'json' && dataStoreType !== 'supabase' && dataStoreType !== 'postgres') {
+  if (dataStoreType === 'unsupported') {
     const msg = `Unsupported DATA_STORE value: ${rawStoreType}`;
     if (isProd) throw new Error(msg);
     console.warn(msg);

@@ -132,8 +132,16 @@ export default function OwnerPage() {
   }
 
   function connectCalendar() {
-    if (!selectedBusinessId) return;
-    window.location.href = `/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&password=password`;
+    if (!selectedBusinessId || !token) return;
+    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&mode=url`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
+        window.location.href = data.url;
+      })
+      .catch((e) => setMsg(String(e.message || e)));
   }
 
   if (!token) {
@@ -209,6 +217,19 @@ export default function OwnerPage() {
               <Stat title="Confirmed" value={dashboard.metrics.confirmed30d} />
               <Stat title="Conversations" value={dashboard.metrics.conversations30d} />
               <Stat title="Conversion" value={`${dashboard.metrics.conversionRate}%`} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
+              <Stat title="Calendar Synced" value={dashboard.metrics.calendarSynced30d} />
+              <Stat title="Top Service" value={dashboard.topServices?.[0]?.service || 'n/a'} />
+            </div>
+
+            <h4>Top Services</h4>
+            <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+              {(dashboard.topServices || []).map((s: any) => (
+                <div key={s.service} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                  <strong>{s.service}</strong> - {s.count} bookings
+                </div>
+              ))}
             </div>
             <h4>Recent Bookings</h4>
             <div style={{ display: 'grid', gap: 6 }}>

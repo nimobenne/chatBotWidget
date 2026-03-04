@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAssistant, validateChatInput } from '@/lib/ai';
 import { getStore } from '@/lib/store';
+import { getRequestContext } from '@/lib/observability';
+import { verifyWidgetToken } from '@/lib/widgetToken';
 
 const rateMap = new Map<string, { count: number; resetAt: number }>();
 // NOTE: In-memory rate limiting doesn't work with multiple server instances.
@@ -44,6 +46,7 @@ function checkRateLimit(key: string, max = 20, windowMs = 60_000): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = getRequestContext(req, 'POST /api/chat');
   try {
     const body = await req.json();
     const parsed = validateChatInput(body);
@@ -55,11 +58,20 @@ export async function POST(req: NextRequest) {
     const host = extractHost(origin);
     const isSameHost = host && host === req.nextUrl.hostname;
     if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
+      ctx.log('warn', 'Origin blocked', { businessId: parsed.businessId, host });
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+    }
+
+    const token = req.headers.get('x-widget-token');
+    const tokenCheck = verifyWidgetToken(token, { businessId: parsed.businessId, host: host || req.nextUrl.hostname });
+    if (!tokenCheck.ok) {
+      ctx.log('warn', 'Widget token rejected', { businessId: parsed.businessId, reason: tokenCheck.reason });
+      return NextResponse.json({ error: `Unauthorized widget request: ${tokenCheck.reason}` }, { status: 401 });
     }
 
     const ip = (req.headers.get('x-forwarded-for') || 'local').split(',')[0].trim();
     if (!checkRateLimit(`${parsed.businessId}:${ip}`)) {
+      ctx.log('warn', 'Rate limited', { businessId: parsed.businessId, ip });
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     }
 
@@ -74,9 +86,11 @@ export async function POST(req: NextRequest) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
     }
+    ctx.log('info', 'Chat handled', { businessId: parsed.businessId });
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
+    ctx.log('error', 'Chat failed', { error: message });
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

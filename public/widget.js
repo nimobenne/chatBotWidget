@@ -23,6 +23,7 @@
     bookingMode: 'calendar',
     services: defaultServices
   };
+  let widgetToken = '';
 
   const bookingKey = `ai_receptionist_booking_${businessId}_${sessionId}`;
   const initialBooking = {
@@ -123,6 +124,7 @@
           bookingMode: data.bookingMode || widgetConfig.bookingMode,
           services: data.services
         };
+        widgetToken = data.widgetToken || '';
       }
     } catch {
       // Keep defaults when config endpoint fails.
@@ -361,7 +363,7 @@
   async function checkAvailability(serviceName, dateISO) {
     const res = await fetch(`${apiBase}/api/booking/availability`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken },
       body: JSON.stringify({ businessId, serviceName, date: dateISO })
     });
     return res.json();
@@ -370,7 +372,7 @@
   async function createBooking() {
     const res = await fetch(`${apiBase}/api/booking/create`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken },
       body: JSON.stringify({
         businessId,
         serviceName: booking.serviceName,
@@ -530,7 +532,7 @@
     try {
       const res = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken },
         body: JSON.stringify({ businessId, sessionId, message })
       });
       const data = await res.json();
