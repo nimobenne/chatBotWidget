@@ -24,6 +24,7 @@ export default function OwnerPage() {
   const [businesses, setBusinesses] = useState<OwnerBusiness[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [dashboard, setDashboard] = useState<any>(null);
+  const [intakeRequests, setIntakeRequests] = useState<any[]>([]);
   const [newBiz, setNewBiz] = useState({
     businessId: '',
     name: '',
@@ -82,6 +83,7 @@ export default function OwnerPage() {
       return;
     }
     setBusinesses(data.businesses || []);
+    setIntakeRequests(data.intakeRequests || []);
     if (!selectedBusinessId && data.businesses?.length) {
       setSelectedBusinessId(data.businesses[0].businessId);
       loadDashboard(authToken, data.businesses[0].businessId);
@@ -129,13 +131,11 @@ export default function OwnerPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      setMsg(data.error || 'Failed to create business');
+      setMsg(data.error || 'Failed to submit business request');
       return;
     }
-    setMsg('Business created.');
+    setMsg('Business request submitted for admin approval.');
     await loadBusinesses(token);
-    setSelectedBusinessId(newBiz.businessId);
-    await loadDashboard(token, newBiz.businessId);
   }
 
   function connectCalendar() {
@@ -190,6 +190,20 @@ export default function OwnerPage() {
           <input style={{ gridColumn: '1 / -1' }} placeholder="services format: Name:Minutes, Name:Minutes" value={newBiz.servicesText} onChange={(e) => setNewBiz({ ...newBiz, servicesText: e.target.value })} />
         </div>
         <button onClick={createBusiness} style={{ marginTop: 10, padding: '8px 14px' }}>Create / Save</button>
+        <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>New businesses are submitted for admin approval before going live.</p>
+      </section>
+
+      <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <h3>Business Requests</h3>
+        {intakeRequests.length ? (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {intakeRequests.map((r) => (
+              <div key={r.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                <strong>{r.payload?.businessId || 'unknown'}</strong> - {r.status} - {new Date(r.created_at).toLocaleString()}
+              </div>
+            ))}
+          </div>
+        ) : <p>No requests yet.</p>}
       </section>
 
       <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>

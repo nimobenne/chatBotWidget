@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireOwner } from '@/lib/ownerAuth';
@@ -55,7 +54,15 @@ export async function GET(req: NextRequest) {
     }
 
     const ids = (ownerships || []).map((r: any) => r.business_id);
-    if (!ids.length) return NextResponse.json({ businesses: [] });
+
+    const { data: requests } = await supabase
+      .from('business_intake_requests')
+      .select('id, status, created_at, approved_at, payload')
+      .eq('owner_user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!ids.length) return NextResponse.json({ businesses: [], intakeRequests: requests || [] });
 
     const { data: businesses, error: bizErr } = await supabase
       .from('businesses')
@@ -64,7 +71,7 @@ export async function GET(req: NextRequest) {
       .order('updated_at', { ascending: false });
 
     if (bizErr) return NextResponse.json({ error: bizErr.message }, { status: 400 });
-    return NextResponse.json({ businesses: (businesses || []).map(toConfig) });
+    return NextResponse.json({ businesses: (businesses || []).map(toConfig), intakeRequests: requests || [] });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     return NextResponse.json({ error: message }, { status: 401 });
@@ -76,14 +83,8 @@ export async function POST(req: NextRequest) {
     const { user, supabase } = await requireOwner(req);
     const parsed = businessSchema.parse(await req.json());
 
-    const record = {
-      id: randomUUID(),
-      slug: parsed.businessId,
-      name: parsed.name,
-      timezone: parsed.timezone,
-      phone: parsed.contact.phone,
-      email: parsed.contact.email || '',
-      address: parsed.contact.address || '',
+    const payload = {
+      ...parsed,
       hours: {
         monday: { open: '09:00', close: '18:00' },
         tuesday: { open: '09:00', close: '18:00' },
@@ -93,40 +94,26 @@ export async function POST(req: NextRequest) {
         saturday: { open: '10:00', close: '16:00' },
         sunday: null
       },
-      services: parsed.services,
-      allowed_domains: ['localhost', '127.0.0.1'],
-      booking_mode: parsed.bookingMode,
+      allowedDomains: ['localhost', '127.0.0.1'],
       policies: {
         cancellation: 'Please provide at least 12 hours notice for cancellations.',
         booking: 'Walk-ins welcome, appointments recommended.'
       },
-      faqs: {},
-      slot_interval_min: 30,
-      buffer_min: 10,
-      booking_window_days: 30,
-      widget_style: { accentColor: '#111827' },
-      updated_at: new Date().toISOString()
+      faq: {},
+      styling: { accentColor: '#111827' }
     };
 
-    const { data: business, error: upsertErr } = await supabase
-      .from('businesses')
-      .upsert(record, { onConflict: 'slug' })
-      .select('id, slug, name, timezone, phone, email, address, hours, services, policies, faqs, allowed_domains, booking_mode, widget_style')
+    const { data: request, error: requestErr } = await supabase
+      .from('business_intake_requests')
+      .insert({ owner_user_id: user.id, payload, status: 'pending' })
+      .select('id, status, created_at')
       .single();
 
-    if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 400 });
-
-    const { error: ownerErr } = await supabase
-      .from('business_owners')
-      .upsert({ business_id: business.id, owner_user_id: user.id }, { onConflict: 'business_id,owner_user_id' });
-
-    if (ownerErr) {
-      return NextResponse.json({
-        error: `${ownerErr.message}. Create business_owners table first.`
-      }, { status: 400 });
+    if (requestErr) {
+      return NextResponse.json({ error: `${requestErr.message}. Create business_intake_requests table first.` }, { status: 400 });
     }
 
-    return NextResponse.json({ business: toConfig(business) });
+    return NextResponse.json({ intakeRequest: request });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     return NextResponse.json({ error: message }, { status: 400 });

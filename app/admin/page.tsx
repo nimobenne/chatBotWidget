@@ -47,6 +47,7 @@ export default function AdminPage() {
   const [form, setForm] = useState<BusinessConfig>(defaultBusiness);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [intakeRequests, setIntakeRequests] = useState<any[]>([]);
 
   useEffect(() => {
     if (!password) return;
@@ -56,6 +57,10 @@ export default function AdminPage() {
         if (!r.ok) throw new Error(data.error || 'Failed to load businesses');
         const list = (data.businesses || []) as BusinessConfig[];
         setBusinesses(list);
+        fetch('/api/admin/intake/requests', { headers: { 'x-admin-password': password } })
+          .then((r) => r.json())
+          .then((d) => setIntakeRequests(d.requests || []))
+          .catch(() => null);
         if (list.length && !selectedBusinessId) {
           setSelectedBusinessId(list[0].businessId);
           setForm(list[0]);
@@ -75,6 +80,27 @@ export default function AdminPage() {
 
   function updateField<K extends keyof BusinessConfig>(key: K, value: BusinessConfig[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function approveRequest(requestId: string) {
+    try {
+      const res = await fetch('/api/admin/intake/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ requestId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to approve');
+      setMessage(`Approved request for ${data.businessSlug}`);
+      const refreshed = await fetch('/api/businesses', {
+        headers: { 'x-admin-password': password }
+      }).then((r) => r.json());
+      setBusinesses(refreshed.businesses || []);
+      const reqs = await fetch('/api/admin/intake/requests', { headers: { 'x-admin-password': password } }).then((r) => r.json());
+      setIntakeRequests(reqs.requests || []);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Error');
+    }
   }
 
   function updateDay(day: (typeof dayNames)[number], key: 'open' | 'close', value: string) {
@@ -269,6 +295,25 @@ export default function AdminPage() {
           {saving ? 'Saving...' : 'Save Business'}
         </button>
       </div>
+
+      <h3 style={{ marginTop: 16 }}>Pending Intake Requests</h3>
+      {intakeRequests.filter((r) => r.status === 'pending').length ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {intakeRequests.filter((r) => r.status === 'pending').map((r) => (
+            <div key={r.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div><strong>{r.payload?.businessId || 'unknown'}</strong> - {r.payload?.name || ''}</div>
+              <div style={{ fontSize: 13, color: '#475569' }}>
+                Contact: {r.payload?.contact?.phone || ''} / {r.payload?.contact?.email || ''}
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => approveRequest(r.id)} style={{ padding: '6px 10px' }}>Approve & Import</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>No pending requests.</p>
+      )}
 
       <h3 style={{ marginTop: 16 }}>Preview JSON (advanced)</h3>
       <pre style={{ background: '#0f172a', color: '#e2e8f0', padding: 12, borderRadius: 8, minHeight: 160 }}>
