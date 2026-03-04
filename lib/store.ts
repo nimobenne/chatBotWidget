@@ -16,6 +16,7 @@ export interface DataStore {
   createBooking(record: Omit<BookingRecord, 'bookingId' | 'createdAt'>): Promise<BookingRecord>;
   createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord>;
   logConversation(log: ConversationLog): Promise<void>;
+  getConversationHistory(businessId: string, sessionId: string, limit?: number): Promise<ConversationLog[]>;
   getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null>;
   saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void>;
 }
@@ -87,6 +88,13 @@ class JsonDataStore implements DataStore {
     const logs = await readJson<ConversationLog[]>(CONVERSATIONS_PATH, []);
     logs.push(log);
     await writeJson(CONVERSATIONS_PATH, logs);
+  }
+
+  async getConversationHistory(businessId: string, sessionId: string, limit = 10): Promise<ConversationLog[]> {
+    const logs = await readJson<ConversationLog[]>(CONVERSATIONS_PATH, []);
+    return logs
+      .filter(l => l.businessId === businessId && l.sessionId === sessionId)
+      .slice(-limit);
   }
 
   async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {
@@ -344,6 +352,29 @@ class SupabaseDataStore implements DataStore {
     }, { onConflict: 'business_id, session_id' });
     
     if (error) console.error('Failed to log conversation:', error.message);
+  }
+
+  async getConversationHistory(businessId: string, sessionId: string, limit = 10): Promise<ConversationLog[]> {
+    const businessDbId = await this.getBusinessDbId(businessId);
+    if (!businessDbId) return [];
+    
+    const { data, error } = await this.client
+      .from('conversations')
+      .select('*')
+      .eq('business_id', businessDbId)
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    
+    if (error || !data) return [];
+    
+    return data.map((c: any) => ({
+      businessId,
+      sessionId: c.session_id,
+      userMessage: c.last_user_message,
+      assistantMessage: c.last_assistant_message,
+      createdAt: c.created_at
+    }));
   }
 
   async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {

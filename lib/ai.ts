@@ -29,11 +29,13 @@ ${services}
 
 BOOKING IS ${business.bookingMode === 'calendar' ? 'ENABLED' : 'DISABLED'}.
 
+IMPORTANT: Remember what the customer tells you during this conversation. Don't ask for the same info twice.
+
 When customers want to book:
-1. Ask what service they want
-2. Ask what date/time works
-3. Get their name and email
-4. Say you'll confirm and book it
+1. Ask what service they want (if they haven't said)
+2. Ask what date/time works (if they haven't said)
+3. Get their name and email (if they haven't given)
+4. Then book it
 
 If booking is disabled, say "Online booking is not available. Please call ${business.contact.phone} to book."
 
@@ -87,12 +89,20 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
   ] : [];
 
   try {
+    // Get conversation history
+    const history = await store.getConversationHistory(input.businessId, input.sessionId, 8);
+    
+    const historyText = history.length > 0 
+      ? history.map(h => `User: ${h.userMessage}\nAssistant: ${h.assistantMessage}`).join('\n\n')
+      : '';
+
     const response = await client.chat.completions.create({
       model: 'gpt-4o',
       tools,
       messages: [
-        { role: 'system', content: getSystemPrompt(business) },
-        { role: 'user', content: input.message }
+        { role: 'system' as const, content: getSystemPrompt(business) },
+        ...(historyText ? [{ role: 'user' as const, content: `Previous conversation:\n${historyText}` }] : []),
+        { role: 'user' as const, content: input.message }
       ]
     });
 
