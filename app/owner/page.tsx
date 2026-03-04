@@ -60,7 +60,14 @@ export default function OwnerPage() {
 
   async function sendMagicLink() {
     setMsg('');
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    const redirectTo = typeof window !== 'undefined'
+      ? `${window.location.origin}/owner`
+      : 'https://chat-bot-widget-two.vercel.app/owner';
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo }
+    });
     if (error) setMsg(error.message);
     else setMsg('Magic link sent. Check your email.');
   }
