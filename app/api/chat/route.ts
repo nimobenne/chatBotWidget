@@ -1,36 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAssistant, validateChatInput } from '@/lib/ai';
-import { getStore } from '@/lib/store';
+import { getSupabaseStore } from '@/lib/store.supabase';
+
+export const runtime = 'nodejs';
 
 const rateMap = new Map<string, { count: number; resetAt: number }>();
-// NOTE: In-memory rate limiting doesn't work with multiple server instances.
-// For production (e.g., Vercel with multiple instances), use Redis or similar.
 
 function sanitize(text: string): string {
-  return text.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 1000);
+  return text.replace(/[\u0000-\u001F\u007F]/g, '').trim();
 }
 
-function extractHost(origin: string | null): string {
+function extractHostFromOrigin(origin: string | null): string {
   if (!origin) return '';
   try {
-    return new URL(origin).hostname;
+    return new URL(origin).hostname.toLowerCase();
   } catch {
     return '';
   }
 }
 
-function domainAllowed(host: string, allowedDomains: string[]): boolean {
-  const normalized = host.toLowerCase();
-  return allowedDomains.some((entry) => {
-    const rule = entry.toLowerCase().trim();
-    if (!rule) return false;
-    if (rule === '*') return true;
-    if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
-    return normalized === rule;
-  });
+function extractHostFromHeader(hostHeader: string | null): string {
+  if (!hostHeader) return '';
+  return hostHeader.split(':')[0].trim().toLowerCase();
 }
 
-function checkRateLimit(key: string, max = 20, windowMs = 60_000): boolean {
+function domainAllowed(host: string, allowedDomains: string[]): boolean {
+  const normalized = host.toLowerCase();
+  return allowedDomains.some((entry) => normalized === String(entry).toLowerCase().trim());
+}
+
+function checkRateLimit(key: string, max = 30, windowMs = 60_000): boolean {
   const now = Date.now();
   const current = rateMap.get(key);
   if (!current || current.resetAt < now) {
@@ -47,30 +46,42 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = validateChatInput(body);
-    const store = getStore();
-    const business = await store.getBusinessConfig(parsed.businessId);
-    if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
+    const sessionId = sanitize(parsed.sessionId);
+    const message = sanitize(parsed.message);
+    const slug = parsed.businessId || (process.env.NODE_ENV !== 'production' ? 'demo_barber' : '');
+
+    if (!slug) {
+      return NextResponse.json({ error: 'Widget misconfigured: businessId missing' }, { status: 400 });
+    }
+
+    const store = getSupabaseStore();
+    const business = await store.getBusinessBySlug(slug);
+    if (!business) {
+      return NextResponse.json(
+        { error: 'This chat widget is not configured. Please contact the business.' },
+        { status: 404 }
+      );
+    }
 
     const origin = req.headers.get('origin');
-    const host = extractHost(origin);
-    const isSameHost = host && host === req.nextUrl.hostname;
-    if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
-      return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+    const originHost = extractHostFromOrigin(origin);
+    const requestHost = extractHostFromHeader(req.headers.get('host'));
+    const host = originHost || requestHost;
+    const isSameHost = Boolean(host) && host === req.nextUrl.hostname;
+
+    if (host && !isSameHost && !domainAllowed(host, business.allowed_domains || [])) {
+      return NextResponse.json({ error: 'Widget not authorized on this domain.' }, { status: 403 });
     }
 
     const ip = (req.headers.get('x-forwarded-for') || 'local').split(',')[0].trim();
-    if (!checkRateLimit(`${parsed.businessId}:${ip}`)) {
-      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!checkRateLimit(`${slug}:${ip}`)) {
+      return NextResponse.json({ error: 'Too many messages, try again soon.' }, { status: 429 });
     }
 
-    const result = await runAssistant({
-      businessId: parsed.businessId,
-      sessionId: sanitize(parsed.sessionId),
-      message: sanitize(parsed.message)
-    });
+    const result = await runAssistant({ businessId: slug, sessionId, message });
 
     const res = NextResponse.json(result);
-    if (origin && host && (isSameHost || domainAllowed(host, business.allowedDomains))) {
+    if (origin && originHost && (isSameHost || domainAllowed(originHost, business.allowed_domains || []))) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
     }
@@ -81,11 +92,25 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export const OPTIONS = async (req: NextRequest) => {
-  const origin = req.headers.get('origin') || '*';
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin');
+  const originHost = extractHostFromOrigin(origin);
+  const slug = req.nextUrl.searchParams.get('businessId') || (process.env.NODE_ENV !== 'production' ? 'demo_barber' : '');
+
+  if (!origin || !originHost || !slug) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  const store = getSupabaseStore();
+  const business = await store.getBusinessBySlug(slug);
+  if (!business || !domainAllowed(originHost, business.allowed_domains || [])) {
+    return NextResponse.json({ error: 'Widget not authorized on this domain.' }, { status: 403 });
+  }
+
   const res = new NextResponse(null, { status: 204 });
   res.headers.set('Access-Control-Allow-Origin', origin);
   res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.headers.set('Vary', 'Origin');
   return res;
-};
+}

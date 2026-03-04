@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStore } from '@/lib/store';
-import { BusinessConfig } from '@/lib/types';
+import { getSupabaseStore } from '@/lib/store.supabase';
+
+export const runtime = 'nodejs';
 
 function authed(req: NextRequest): boolean {
   const pwd = process.env.ADMIN_PASSWORD;
   if (!pwd) return false;
-  const provided = req.headers.get('x-admin-password') || req.nextUrl.searchParams.get('password');
+  const provided = req.headers.get('x-admin-password');
   return provided === pwd;
 }
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Admin disabled' }, { status: 404 });
   }
   if (!authed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const businesses = await getStore().listBusinesses();
+  const businesses = await getSupabaseStore().listBusinesses();
   return NextResponse.json({ businesses });
 }
 
@@ -23,7 +24,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Admin disabled' }, { status: 404 });
   }
   if (!authed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const business = (await req.json()) as BusinessConfig;
-  await getStore().saveBusinessConfig(business);
-  return NextResponse.json({ ok: true });
+  void req;
+  return NextResponse.json({ error: 'Editing businesses from this endpoint is not implemented for Supabase yet.' }, { status: 501 });
 }

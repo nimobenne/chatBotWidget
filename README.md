@@ -1,46 +1,36 @@
 # Multi-Tenant AI Receptionist Widget (Next.js)
 
-Production-ready MVP for an embeddable AI receptionist chat widget + backend.
+Production-ready, embeddable AI receptionist with multi-tenant business support via `businessId` (business slug), Supabase persistence, optional Google Calendar booking, and owner handoff alerts.
 
-## Features
-- Multi-tenant via `businessId`.
-- Embeddable widget script at `/widget.js`.
-- Demo route at `/demo?biz=demo_barber`.
-- Chat backend at `/api/chat` with:
-  - tenant config loading
-  - per-business CORS allowlist
-  - input validation + sanitization
-  - in-memory rate limiting (dev-safe baseline)
-  - OpenAI Responses API for business FAQ chat.
-- File-based JSON store by default, with a DAL interface ready for Postgres implementation.
-- Basic admin UI at `/admin` with optional password protection.
+## Required env vars (Vercel)
+- `OPENAI_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (server-only)
+
+## Optional env vars
+- `OPENAI_MODEL` (defaults to `gpt-4o-mini`)
+- `ADMIN_PASSWORD`
+- `RESEND_API_KEY`
+- `ALERT_FROM_EMAIL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+- `GOOGLE_OAUTH_STATE_SECRET` (recommended for signed OAuth state)
+
+> After adding/changing env vars on Vercel, **redeploy**.
 
 ## Local setup
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Copy env file:
-   ```bash
-   cp .env.example .env.local
-   ```
-3. Set required env var:
-   - `OPENAI_API_KEY` (**required**)
-4. Optional:
-   - `ADMIN_PASSWORD` (enables and protects admin API routes)
-5. Start dev server:
-   ```bash
-   npm run dev
-   ```
-6. Open:
-   - `http://localhost:3000/demo?biz=demo_barber`
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
+Then open:
+- `http://localhost:3000/demo?biz=demo_barber`
+- `http://localhost:3000/api/health`
 
-## Demo business to test
-- Use `businessId=demo_barber` for local and Vercel testing.
-- Quick URL: `/demo?biz=demo_barber`
-
-## Embed on any website
+## Widget embed
 ```html
 <script
   src="https://YOUR_DOMAIN/widget.js"
@@ -50,51 +40,40 @@ Production-ready MVP for an embeddable AI receptionist chat widget + backend.
 ></script>
 ```
 
-## Important embed behavior
-- The widget now posts chat requests to the same origin that serves `widget.js` (not the host page origin).
-- For cross-site embeds, add the exact hostname to business `allowedDomains`.
+Business resolution order in widget:
+1. `data-business`
+2. `window.__AI_RECEPTIONIST_BUSINESS_ID__`
+3. `?biz=` query param
+4. `demo_barber` only for demo/dev
 
-## Notes on data layer
-- JSON files under `/data` are used for local/dev.
-- To move to Postgres (Neon/Supabase), implement `DataStore` in `lib/store.ts` and set `DATA_STORE=postgres`.
+## API
+- `POST /api/chat` body: `{ businessId, sessionId, message }`
+- `GET /api/health` returns `{ ok, hasOpenAIKey, hasSupabase }`
+- `GET /api/google/oauth/start?businessId=...`
+- `GET /api/google/oauth/callback`
 
-## Security notes
-- API key is server-only; never sent to browser.
-- `/api/chat` enforces per-business domain allowlist (Origin host must match `allowedDomains`).
-- Rate limiting is in-memory (for production use Upstash/Redis).
-- Tenant isolation enforced by always loading tools/data scoped by `businessId`.
-
-## Deployment on Vercel
-- Add env vars in Project Settings:
-  - `OPENAI_API_KEY` (required)
-  - `ADMIN_PASSWORD` (optional)
-  - Google Calendar vars (optional/future)
-- Deploy as normal Next.js App Router project.
-
-## Google Calendar feature flag (future)
-- Calendar integration is designed behind env vars and can be added later:
-  - if business-level Google credentials exist, call FreeBusy + create event
-  - else fallback to internal availability/booking store
+## Security
+- Server-only OpenAI + Supabase credentials.
+- Domain allowlist enforced per business.
+- In-memory rate limiting included (upgrade to Redis/Upstash for production).
+- Tenant isolation enforced by business slug lookup.
 
 
-## Vercel 404 troubleshooting
-If Vercel shows `404: NOT_FOUND`, check these first:
+Admin API auth uses the `x-admin-password` header when `ADMIN_PASSWORD` is set.
 
-1. **Root Directory**
-   - In Vercel Project Settings, set Root Directory to the folder containing `package.json` (this repo root).
-2. **Framework Preset**
-   - Ensure framework is **Next.js** (this repo includes `vercel.json` to force that).
-3. **Build Output Misconfiguration**
-   - Leave Output Directory empty for Next.js (do not set it to `public` or another folder).
-4. **Redeploy after env vars**
-   - Add env vars (`OPENAI_API_KEY` at minimum), then trigger a fresh deploy.
-5. **Route checks**
-   - `/` and `/demo?biz=demo_barber` should load.
-   - `/widget.js` should return the embed script.
 
-Quick verification commands after deploy:
-```bash
-curl -i https://YOUR_DOMAIN/
-curl -i https://YOUR_DOMAIN/demo?biz=demo_barber
-curl -i https://YOUR_DOMAIN/widget.js
-```
+When Google Calendar is connected for a business, available slots are filtered with Google FreeBusy; otherwise internal booking records are used.
+
+
+Booking confirmations can optionally be emailed to customers when `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are set.
+
+
+## Supabase schema (required)
+Run `supabase.schema.sql` in your Supabase SQL editor to ensure table/column names match the app code (`messages`, `last_user_message`, `last_assistant_message`, `google_calendar_connections`, and booking overlap guard).
+
+## Google Calendar booking troubleshooting
+If bookings are saved in Supabase but not appearing in Google Calendar:
+1. Make sure OAuth was connected for the same `businessId` you are booking against.
+2. Verify `google_calendar_connections` contains a row for that business.
+3. Confirm `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` are set and deployment was redeployed.
+4. Check booking response details for `calendarSynced` and `calendarSyncError`.
