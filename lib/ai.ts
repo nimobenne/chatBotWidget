@@ -17,11 +17,21 @@ export function validateChatInput(payload: unknown) {
 
 function getSystemPrompt(businessName: string, bookingEnabled: boolean, services: { name: string; durationMin: number; priceRange?: string }[], phone: string) {
   const serviceList = services.map(s => `- ${s.name} (${s.durationMin} min${s.priceRange ? ` - ${s.priceRange}` : ''})`).join('\n');
+  const serviceAliases = services.map(s => {
+    const lower = s.name.toLowerCase();
+    if (lower.includes('classic haircut')) return `${s.name}: haircut, cut, hair`;
+    if (lower.includes('skin fade')) return `${s.name}: fade, skin fade`;
+    if (lower.includes('beard trim')) return `${s.name}: beard, trim`;
+    return `${s.name}: ${lower}`;
+  }).join('\n');
   
   return `You are ${businessName}'s receptionist. Help customers book appointments.
 
 SERVICES:
 ${serviceList}
+
+SERVICE ALIASES (map these to actual services):
+${serviceAliases}
 
 HOW TO BOOK (follow exactly):
 
@@ -35,6 +45,7 @@ HOW TO BOOK (follow exactly):
 8. Say: "Your booking is confirmed! Check your email for details."
 
 RULES:
+- Map "haircut" to "Classic Haircut", "fade" to "Skin Fade", "beard" to "Beard Trim"
 - Ask ONE question at a time. Wait for answer before next step.
 - If online booking is disabled, say: "I'm sorry, please call ${phone} to book."
 - Do NOT call create_booking until you have: service + date/time + name + email
