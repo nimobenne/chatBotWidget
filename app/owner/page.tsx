@@ -21,15 +21,6 @@ export default function OwnerPage() {
   const [businesses, setBusinesses] = useState<OwnerBusiness[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [dashboard, setDashboard] = useState<any>(null);
-  const [intakeRequests, setIntakeRequests] = useState<any[]>([]);
-  const [newBiz, setNewBiz] = useState({
-    businessId: '',
-    name: '',
-    timezone: 'America/New_York',
-    phone: '',
-    email: '',
-    servicesText: 'Classic Haircut:30, Skin Fade:45'
-  });
 
   const selected = useMemo(
     () => businesses.find((b) => b.businessId === selectedBusinessId) || null,
@@ -81,7 +72,6 @@ export default function OwnerPage() {
       return;
     }
     setBusinesses(data.businesses || []);
-    setIntakeRequests(data.intakeRequests || []);
     if (data.businesses?.length) {
       const first = data.businesses[0].businessId;
       setSelectedBusinessId(first);
@@ -101,42 +91,6 @@ export default function OwnerPage() {
     setDashboard(data);
   }
 
-  async function submitIntakeRequest() {
-    setMsg('');
-    if (!token) return;
-    const services = newBiz.servicesText
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => {
-        const [name, mins] = s.split(':').map((v) => v.trim());
-        return { name, durationMin: Number(mins || '30'), priceRange: '' };
-      });
-
-    const res = await fetch('/api/owner/businesses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        businessId: newBiz.businessId,
-        name: newBiz.name,
-        timezone: newBiz.timezone,
-        contact: { phone: newBiz.phone, email: newBiz.email },
-        bookingMode: 'calendar',
-        services
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setMsg(data.error || 'Failed to submit business request');
-      return;
-    }
-    setMsg('Business request submitted for admin approval.');
-    await loadBusinesses(token);
-  }
-
   function connectCalendar() {
     if (!selectedBusinessId || !token) return;
     fetch(`/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&mode=url`, {
@@ -146,24 +100,6 @@ export default function OwnerPage() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
         window.location.href = data.url;
-      })
-      .catch((e) => setMsg(String(e.message || e)));
-  }
-
-  function disconnectCalendar() {
-    if (!selectedBusinessId || !token) return;
-    fetch('/api/auth/google/disconnect', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ businessId: selectedBusinessId })
-    })
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
-        setMsg(data.message || `Calendar disconnected for ${selectedBusinessId}.`);
       })
       .catch((e) => setMsg(String(e.message || e)));
   }
@@ -197,37 +133,10 @@ export default function OwnerPage() {
   return (
     <main style={{ maxWidth: 1040, margin: '30px auto', padding: 20 }}>
       <h1>Owner Dashboard</h1>
-      <p>Submit onboarding info, connect calendar, and track bookings.</p>
+      <p>Connect calendar and track bookings.</p>
       <div style={{ marginBottom: 12 }}>
         <button onClick={logout} style={{ padding: '8px 14px' }}>Sign Out</button>
       </div>
-
-      <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <h3>Submit New Business Intake</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
-          <input placeholder="business id" value={newBiz.businessId} onChange={(e) => setNewBiz({ ...newBiz, businessId: e.target.value })} />
-          <input placeholder="business name" value={newBiz.name} onChange={(e) => setNewBiz({ ...newBiz, name: e.target.value })} />
-          <input placeholder="timezone" value={newBiz.timezone} onChange={(e) => setNewBiz({ ...newBiz, timezone: e.target.value })} />
-          <input placeholder="phone" value={newBiz.phone} onChange={(e) => setNewBiz({ ...newBiz, phone: e.target.value })} />
-          <input placeholder="email" value={newBiz.email} onChange={(e) => setNewBiz({ ...newBiz, email: e.target.value })} />
-          <input value="calendar (online booking)" disabled />
-          <input style={{ gridColumn: '1 / -1' }} placeholder="services format: Name:Minutes, Name:Minutes" value={newBiz.servicesText} onChange={(e) => setNewBiz({ ...newBiz, servicesText: e.target.value })} />
-        </div>
-        <button onClick={submitIntakeRequest} style={{ marginTop: 10, padding: '8px 14px' }}>Submit Intake</button>
-      </section>
-
-      <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <h3>Business Requests</h3>
-        {intakeRequests.length ? (
-          <div style={{ display: 'grid', gap: 6 }}>
-            {intakeRequests.map((r) => (
-              <div key={r.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-                <strong>{r.payload?.businessId || 'unknown'}</strong> - {r.status} - {new Date(r.created_at).toLocaleString()}
-              </div>
-            ))}
-          </div>
-        ) : <p>No requests yet.</p>}
-      </section>
 
       <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <h3>Assigned Business</h3>
@@ -242,7 +151,6 @@ export default function OwnerPage() {
             ))}
           </select>
           <button onClick={connectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Connect Calendar</button>
-          <button onClick={disconnectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Disconnect Calendar</button>
         </div>
         {selected ? (
           <div style={{ fontSize: 14 }}>

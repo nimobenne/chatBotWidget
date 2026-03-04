@@ -48,7 +48,6 @@ export default function AdminPage() {
   const [form, setForm] = useState<BusinessConfig>(defaultBusiness);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
-  const [intakeRequests, setIntakeRequests] = useState<any[]>([]);
   const [owners, setOwners] = useState<any[]>([]);
   const [ownerForm, setOwnerForm] = useState({ username: '', password: '', businessId: '' });
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
@@ -88,8 +87,6 @@ export default function AdminPage() {
     const data = await requestJson('/api/businesses', { headers: adminHeaders() });
     const list = (data.businesses || []) as BusinessConfig[];
     setBusinesses(list);
-    const intake = await requestJson('/api/admin/intake/requests', { headers: adminHeaders() });
-    setIntakeRequests(intake.requests || []);
     const ownerRows = await requestJson('/api/admin/owners', { headers: adminHeaders() });
     setOwners(ownerRows.owners || []);
     if (list.length && !selectedBusinessId) {
@@ -114,22 +111,6 @@ export default function AdminPage() {
 
   function updateField<K extends keyof BusinessConfig>(key: K, value: BusinessConfig[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  async function approveRequest(requestId: string) {
-    try {
-      const res = await fetch('/api/admin/intake/approve', {
-        method: 'POST',
-        headers: adminHeaders(true),
-        body: JSON.stringify({ requestId })
-      });
-      const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Failed to approve');
-      setMessage(`Approved request for ${data.businessSlug}`);
-      await loadAdminData();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Error');
-    }
   }
 
   async function saveOwner() {
@@ -301,24 +282,6 @@ export default function AdminPage() {
       .catch((e) => setMessage(String(e.message || e)));
   }
 
-  function disconnectGoogleCalendar() {
-    if (!adminToken || !form.businessId) {
-      setMessage('Sign in and select a business first.');
-      return;
-    }
-    fetch('/api/auth/google/disconnect', {
-      method: 'POST',
-      headers: adminHeaders(true),
-      body: JSON.stringify({ businessId: form.businessId })
-    })
-      .then(async (r) => {
-        const data = await readJsonSafe(r);
-        if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
-        setMessage(data.message || `Calendar disconnected for ${form.businessId}.`);
-      })
-      .catch((e) => setMessage(String(e.message || e)));
-  }
-
   const ownerUsernameForSql = (sqlOwnerUsername || 'owner_username_here').trim().toLowerCase();
 
   const sqlTemplate = `begin;
@@ -429,7 +392,6 @@ commit;`;
         </select>
         <button onClick={startNewBusiness} style={{ padding: '8px 14px' }}>New Business</button>
         <button onClick={connectGoogleCalendar} style={{ padding: '8px 14px' }}>Connect Calendar</button>
-        <button onClick={disconnectGoogleCalendar} style={{ padding: '8px 14px' }}>Disconnect Calendar</button>
         <button onClick={() => { setAdminToken(''); setPassword(''); }} style={{ padding: '8px 14px' }}>Sign Out</button>
       </div>
 
@@ -500,25 +462,6 @@ commit;`;
           {saving ? 'Saving...' : 'Save Business'}
         </button>
       </div>
-
-      <h3 style={{ marginTop: 16 }}>Pending Intake Requests</h3>
-      {intakeRequests.filter((r) => r.status === 'pending').length ? (
-        <div style={{ display: 'grid', gap: 8 }}>
-          {intakeRequests.filter((r) => r.status === 'pending').map((r) => (
-            <div key={r.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-              <div><strong>{r.payload?.businessId || 'unknown'}</strong> - {r.payload?.name || ''}</div>
-              <div style={{ fontSize: 13, color: '#475569' }}>
-                Contact: {r.payload?.contact?.phone || ''} / {r.payload?.contact?.email || ''}
-              </div>
-              <div style={{ marginTop: 8 }}>
-                <button onClick={() => approveRequest(r.id)} style={{ padding: '6px 10px' }}>Approve & Import</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p>No pending requests.</p>
-      )}
 
       <h3 style={{ marginTop: 16 }}>Preview JSON (advanced)</h3>
       <pre style={{ background: '#0f172a', color: '#e2e8f0', padding: 12, borderRadius: 8, minHeight: 160 }}>
