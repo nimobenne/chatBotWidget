@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getStore } from '@/lib/store';
 import { createBookingRecord } from '@/lib/booking';
-import { createCalendarEvent } from '@/lib/calendar';
 import { sendBookingConfirmation } from '@/lib/email';
 
 const schema = z.object({
@@ -23,6 +22,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
     }
 
+    const origin = req.headers.get('origin');
+    const host = origin ? new URL(origin).hostname : '';
+    const isSameHost = host && host === req.nextUrl.hostname;
+    const isAllowed = host && business.allowedDomains.some((d) => {
+      const rule = d.toLowerCase().trim();
+      const normalized = host.toLowerCase();
+      if (!rule) return false;
+      if (rule === '*') return true;
+      if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
+      return normalized === rule;
+    });
+    if (host && !isSameHost && !isAllowed) {
+      return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+    }
+
     const booking = await createBookingRecord({
       business,
       serviceName: parsed.serviceName,
@@ -33,7 +47,6 @@ export async function POST(req: NextRequest) {
       status: 'confirmed'
     });
 
-    await createCalendarEvent(booking, business).catch(() => null);
     await sendBookingConfirmation({
       to: parsed.customerEmail,
       customerName: parsed.customerName,
@@ -44,13 +57,27 @@ export async function POST(req: NextRequest) {
       businessPhone: business.contact.phone
     }).catch(() => null);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       bookingId: booking.bookingId,
       startTimeISO: booking.startTimeISO,
       message: 'Booking confirmed'
     });
+    if (origin && host && (isSameHost || isAllowed)) {
+      res.headers.set('Access-Control-Allow-Origin', origin);
+      res.headers.set('Vary', 'Origin');
+    }
+    return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+
+export const OPTIONS = async (req: NextRequest) => {
+  const origin = req.headers.get('origin') || '*';
+  const res = new NextResponse(null, { status: 204 });
+  res.headers.set('Access-Control-Allow-Origin', origin);
+  res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return res;
+};

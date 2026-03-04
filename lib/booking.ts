@@ -89,7 +89,8 @@ export async function createBookingRecord(params: {
   if (params.status === 'confirmed') {
     try {
       const calendarResult = await createCalendarEvent(booking, params.business);
-      if (calendarResult) {
+      if (calendarResult?.eventId) {
+        await store.updateBookingCalendarEvent(booking.bookingId, calendarResult.eventId).catch(() => null);
         console.log('Calendar event created:', calendarResult.htmlLink);
       }
     } catch (error) {

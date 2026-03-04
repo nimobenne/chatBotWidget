@@ -7,10 +7,22 @@
   const accent = script.getAttribute('data-accent') || '#111827';
   const icon = script.getAttribute('data-icon') || '💬';
   const greeting = script.getAttribute('data-greeting') || 'Hi! How can I help you today?';
+  const consent = script.getAttribute('data-consent') || '';
   const apiBase = new URL(script.src, window.location.href).origin;
   const sessionKey = `ai_receptionist_session_${businessId}`;
   const sessionId = localStorage.getItem(sessionKey) || crypto.randomUUID();
   localStorage.setItem(sessionKey, sessionId);
+  const defaultServices = [
+    { name: 'Classic Haircut' },
+    { name: 'Skin Fade' },
+    { name: 'Beard Trim' }
+  ];
+  let widgetConfig = {
+    name: 'Business',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    bookingMode: 'calendar',
+    services: defaultServices
+  };
 
   const bookingKey = `ai_receptionist_booking_${businessId}_${sessionId}`;
   const initialBooking = {
@@ -100,6 +112,31 @@
   const send = panel.querySelector('.send');
   const minimize = panel.querySelector('.minimize');
 
+  async function loadWidgetConfig() {
+    try {
+      const res = await fetch(`${apiBase}/api/widget/config?businessId=${encodeURIComponent(businessId)}`);
+      const data = await res.json();
+      if (!data.error && Array.isArray(data.services) && data.services.length) {
+        widgetConfig = {
+          name: data.name || widgetConfig.name,
+          timezone: data.timezone || widgetConfig.timezone,
+          bookingMode: data.bookingMode || widgetConfig.bookingMode,
+          services: data.services
+        };
+      }
+    } catch {
+      // Keep defaults when config endpoint fails.
+    }
+  }
+
+  function emitEvent(event, meta) {
+    fetch(`${apiBase}/api/analytics/event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessId, sessionId, event, meta: meta || {} })
+    }).catch(() => null);
+  }
+
   function renderProgress() {
     const steps = ['service', 'datetime', 'name', 'email'];
     if (!booking.active || steps.indexOf(booking.step) === -1) {
@@ -161,11 +198,13 @@
 
   function normalizeService(text) {
     const t = text.toLowerCase();
+    const direct = widgetConfig.services.find((s) => t.includes(String(s.name).toLowerCase()));
+    if (direct) return direct.name;
     if (t.includes('classic')) return 'Classic Haircut';
     if (t.includes('fade')) return 'Skin Fade';
     if (t.includes('beard')) return 'Beard Trim';
     if (t.includes('haircut') || t.includes('cut')) return 'Classic Haircut';
-    return '';
+    return widgetConfig.services[0]?.name || '';
   }
 
   function parseDateTime(text) {
@@ -255,10 +294,9 @@
       return;
     }
     if (booking.step === 'service') {
+      const services = widgetConfig.services.slice(0, 3);
       setQuickButtons([
-        { label: 'Classic Haircut', primary: true, onClick: () => handleBookingInput('Classic Haircut') },
-        { label: 'Skin Fade', onClick: () => handleBookingInput('Skin Fade') },
-        { label: 'Beard Trim', onClick: () => handleBookingInput('Beard Trim') },
+        ...services.map((s, i) => ({ label: s.name, primary: i === 0, onClick: () => handleBookingInput(s.name) })),
         { label: 'Switch to chat', onClick: switchToChat, ghost: true }
       ]);
       renderProgress();
@@ -345,6 +383,11 @@
   }
 
   function startBooking() {
+    if (widgetConfig.bookingMode === 'request') {
+      addMsg('Online booking is disabled for this business. Please switch to chat for assistance.', 'a');
+      bookingButtons();
+      return;
+    }
     booking.active = true;
     booking.step = 'service';
     booking.serviceName = '';
@@ -354,7 +397,9 @@
     booking.customerEmail = '';
     booking.slots = [];
     saveBooking();
-    addMsg('Great - what service would you like? (Classic Haircut, Skin Fade, or Beard Trim)', 'a');
+    const names = widgetConfig.services.map((s) => s.name).join(', ');
+    addMsg(`Great - what service would you like? (${names})`, 'a');
+    emitEvent('booking_started');
     bookingButtons();
   }
 
@@ -373,6 +418,7 @@
       booking.serviceName = mapped;
       booking.step = 'datetime';
       saveBooking();
+      emitEvent('service_selected', { serviceName: mapped });
       addMsg(`Perfect. What date and time works for your ${mapped}?`, 'a');
       bookingButtons();
       return;
@@ -396,7 +442,7 @@
       }
       booking.dateISO = dateISO;
       booking.slots = data.slots || [];
-      booking.timezone = data.timezone || booking.timezone;
+      booking.timezone = data.timezone || widgetConfig.timezone || booking.timezone;
       const match = booking.slots.find((iso) => {
         const s = new Date(iso);
         return s.getHours() === dt.getHours() && s.getMinutes() === dt.getMinutes();
@@ -405,6 +451,7 @@
         booking.selectedSlotISO = match;
         booking.step = 'name';
         saveBooking();
+        emitEvent('slot_matched', { slotISO: match, serviceName: booking.serviceName });
         const tz = booking.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         addMsg(`Great, ${new Date(match).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} is available (${tz}). What's your full name?`, 'a');
         bookingButtons();
@@ -417,6 +464,7 @@
       }
       booking.step = 'pickSlot';
       saveBooking();
+      emitEvent('slot_options_shown', { count: booking.slots.length, dateISO });
       const tz = booking.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
       addMsg(`That exact time is unavailable. Please choose one of these open times (${tz}):`, 'a');
       bookingButtons();
@@ -433,6 +481,7 @@
       booking.selectedSlotISO = selected;
       booking.step = 'name';
       saveBooking();
+      emitEvent('slot_selected', { slotISO: selected, serviceName: booking.serviceName });
       addMsg("Awesome. What's your full name?", 'a');
       bookingButtons();
       return;
@@ -459,11 +508,13 @@
       const data = await createBooking();
       setLoading(false);
       if (data.error) {
+        emitEvent('booking_failed', { error: data.error });
         addMsg(`Sorry, booking failed: ${data.error}`, 'a');
         bookingButtons();
         return;
       }
       addMsg(`Booked! You're set for ${new Date(booking.selectedSlotISO).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}. Confirmation was sent to ${booking.customerEmail}.`, 'a');
+      emitEvent('booking_confirmed', { bookingId: data.bookingId || '', slotISO: booking.selectedSlotISO });
       resetBooking();
       bookingButtons();
       return;
@@ -504,11 +555,14 @@
     }
   }
 
-  addMsg(greeting, 'a');
-  if (booking.active) {
-    addMsg('Welcome back — we can continue your booking.', 'a');
-  }
-  bookingButtons();
+  loadWidgetConfig().finally(() => {
+    addMsg(greeting, 'a');
+    if (consent) addMsg(consent, 'a');
+    if (booking.active) {
+      addMsg('Welcome back — we can continue your booking.', 'a');
+    }
+    bookingButtons();
+  });
 
   bubble.onclick = () => {
     const open = panel.classList.contains('open');

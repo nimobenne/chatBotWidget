@@ -14,9 +14,11 @@ export interface DataStore {
   saveBusinessConfig(business: BusinessConfig): Promise<void>;
   listBookings(businessId: string): Promise<BookingRecord[]>;
   createBooking(record: Omit<BookingRecord, 'bookingId' | 'createdAt'>): Promise<BookingRecord>;
+  updateBookingCalendarEvent(bookingId: string, eventId: string): Promise<void>;
   createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord>;
   logConversation(log: ConversationLog): Promise<void>;
   getConversationHistory(businessId: string, sessionId: string, limit?: number): Promise<ConversationLog[]>;
+  deleteConversationHistory(businessId: string, sessionId: string): Promise<void>;
   getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null>;
   saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void>;
 }
@@ -76,6 +78,10 @@ class JsonDataStore implements DataStore {
     return booking;
   }
 
+  async updateBookingCalendarEvent(_bookingId: string, _eventId: string): Promise<void> {
+    // JSON fallback store does not persist calendar event ids separately.
+  }
+
   async createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord> {
     const handoffs = await readJson<HandoffRecord[]>(HANDOFFS_PATH, []);
     const handoff: HandoffRecord = { ...record, handoffId: randomUUID(), createdAt: new Date().toISOString() };
@@ -95,6 +101,12 @@ class JsonDataStore implements DataStore {
     return logs
       .filter(l => l.businessId === businessId && l.sessionId === sessionId)
       .slice(-limit);
+  }
+
+  async deleteConversationHistory(businessId: string, sessionId: string): Promise<void> {
+    const logs = await readJson<ConversationLog[]>(CONVERSATIONS_PATH, []);
+    const filtered = logs.filter((l) => !(l.businessId === businessId && l.sessionId === sessionId));
+    await writeJson(CONVERSATIONS_PATH, filtered);
   }
 
   async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {
@@ -313,6 +325,14 @@ class SupabaseDataStore implements DataStore {
     };
   }
 
+  async updateBookingCalendarEvent(bookingId: string, eventId: string): Promise<void> {
+    const { error } = await this.client
+      .from('bookings')
+      .update({ calendar_event_id: eventId })
+      .eq('id', bookingId);
+    if (error) throw new Error(error.message);
+  }
+
   async createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord> {
     const businessDbId = await this.getBusinessDbId(record.businessId);
     if (!businessDbId) throw new Error('Business not found');
@@ -343,13 +363,18 @@ class SupabaseDataStore implements DataStore {
     if (!businessDbId) return;
     
     const now = new Date().toISOString();
-    const { error } = await this.client.from('conversations').upsert({
+    const { error } = await this.client.from('conversations').insert({
       business_id: businessDbId,
       session_id: log.sessionId,
+      messages: [
+        { role: 'user', content: log.userMessage },
+        { role: 'assistant', content: log.assistantMessage }
+      ],
       last_user_message: log.userMessage,
       last_assistant_message: log.assistantMessage,
+      created_at: now,
       updated_at: now
-    }, { onConflict: 'business_id, session_id' });
+    });
     
     if (error) console.error('Failed to log conversation:', error.message);
   }
@@ -373,8 +398,19 @@ class SupabaseDataStore implements DataStore {
       sessionId: c.session_id,
       userMessage: c.last_user_message,
       assistantMessage: c.last_assistant_message,
-      createdAt: c.created_at
+      createdAt: c.created_at || c.updated_at || new Date().toISOString()
     }));
+  }
+
+  async deleteConversationHistory(businessId: string, sessionId: string): Promise<void> {
+    const businessDbId = await this.getBusinessDbId(businessId);
+    if (!businessDbId) return;
+    const { error } = await this.client
+      .from('conversations')
+      .delete()
+      .eq('business_id', businessDbId)
+      .eq('session_id', sessionId);
+    if (error) throw new Error(error.message);
   }
 
   async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {
@@ -424,6 +460,7 @@ let singleton: DataStore | null = null;
 
 export function getStore(): DataStore {
   const dataStoreType = process.env.DATA_STORE || 'json';
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   
   if (dataStoreType === 'supabase') {
     try {
@@ -432,6 +469,9 @@ export function getStore(): DataStore {
       }
       return singleton;
     } catch (err) {
+      if (isProd) {
+        throw new Error(`Supabase store failed to initialize in production: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
       console.warn('Supabase store failed to initialize, falling back to JSON:', err);
     }
   }
@@ -443,6 +483,9 @@ export function getStore(): DataStore {
       }
       return singleton;
     } catch (err) {
+      if (isProd) {
+        throw new Error(`Postgres/Supabase store failed to initialize in production: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
       console.warn('Supabase store failed to initialize, falling back to JSON:', err);
     }
   }
