@@ -61,13 +61,36 @@ export default function AdminPage() {
     };
   }
 
+  function escapeSql(value: string | undefined | null): string {
+    return String(value || '').replaceAll("'", "''");
+  }
+
+  async function readJsonSafe(res: Response): Promise<any> {
+    const raw = await res.text();
+    if (!raw.trim()) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { error: `Invalid JSON response (${res.status})` };
+    }
+  }
+
+  async function requestJson(url: string, init?: RequestInit): Promise<any> {
+    const res = await fetch(url, init);
+    const data = await readJsonSafe(res);
+    if (!res.ok) {
+      throw new Error(data.error || `Request failed (${res.status})`);
+    }
+    return data;
+  }
+
   async function loadAdminData() {
-    const data = await fetch('/api/businesses', { headers: adminHeaders() }).then((r) => r.json());
+    const data = await requestJson('/api/businesses', { headers: adminHeaders() });
     const list = (data.businesses || []) as BusinessConfig[];
     setBusinesses(list);
-    const intake = await fetch('/api/admin/intake/requests', { headers: adminHeaders() }).then((r) => r.json());
+    const intake = await requestJson('/api/admin/intake/requests', { headers: adminHeaders() });
     setIntakeRequests(intake.requests || []);
-    const ownerRows = await fetch('/api/admin/owners', { headers: adminHeaders() }).then((r) => r.json());
+    const ownerRows = await requestJson('/api/admin/owners', { headers: adminHeaders() });
     setOwners(ownerRows.owners || []);
     if (list.length && !selectedBusinessId) {
       setSelectedBusinessId(list[0].businessId);
@@ -100,7 +123,7 @@ export default function AdminPage() {
         headers: adminHeaders(true),
         body: JSON.stringify({ requestId })
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'Failed to approve');
       setMessage(`Approved request for ${data.businessSlug}`);
       await loadAdminData();
@@ -124,7 +147,7 @@ export default function AdminPage() {
           businessId: ownerForm.businessId
         })
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'Failed to save owner');
       setMessage(`Owner ${data.owner.username} saved.`);
       setOwnerForm((prev) => ({ ...prev, password: '' }));
@@ -141,7 +164,7 @@ export default function AdminPage() {
         headers: adminHeaders(true),
         body: JSON.stringify({ ownerId, action })
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'Failed');
       setMessage(`Owner ${action === 'activate' ? 'activated' : 'deactivated'}.`);
       await loadAdminData();
@@ -162,7 +185,7 @@ export default function AdminPage() {
         headers: adminHeaders(true),
         body: JSON.stringify({ ownerId, action: 'reset_password', newPassword: nextPassword })
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'Failed');
       setMessage('Owner password reset.');
       setResetPasswords((prev) => ({ ...prev, [ownerId]: '' }));
@@ -179,7 +202,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'Login failed');
       setAdminToken(data.token || '');
     } catch (e) {
@@ -240,7 +263,7 @@ export default function AdminPage() {
         headers: adminHeaders(true),
         body: JSON.stringify(form)
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       setMessage('Business saved.');
       await loadAdminData();
@@ -271,7 +294,7 @@ export default function AdminPage() {
       headers: adminHeaders()
     })
       .then(async (r) => {
-        const data = await r.json();
+        const data = await readJsonSafe(r);
         if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
         window.location.href = data.url;
       })
@@ -289,32 +312,36 @@ export default function AdminPage() {
       body: JSON.stringify({ businessId: form.businessId })
     })
       .then(async (r) => {
-        const data = await r.json();
+        const data = await readJsonSafe(r);
         if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
         setMessage(data.message || `Calendar disconnected for ${form.businessId}.`);
       })
       .catch((e) => setMessage(String(e.message || e)));
   }
 
-  const sqlTemplate = `-- 1) Upsert business config
+  const ownerUsernameForSql = (sqlOwnerUsername || 'owner_username_here').trim().toLowerCase();
+
+  const sqlTemplate = `begin;
+
+-- 1) Upsert business config
 insert into businesses (
   slug, name, timezone, phone, email, address,
   hours, services, policies, allowed_domains, booking_mode, faqs, widget_style,
   slot_interval_min, buffer_min, booking_window_days, updated_at
 ) values (
-  '${form.businessId}',
-  '${form.name.replaceAll("'", "''")}',
-  '${form.timezone}',
-  '${(form.contact.phone || '').replaceAll("'", "''")}',
-  '${(form.contact.email || '').replaceAll("'", "''")}',
-  '${(form.contact.address || '').replaceAll("'", "''")}',
-  '${JSON.stringify(form.hours).replaceAll("'", "''")}'::jsonb,
-  '${JSON.stringify(form.services).replaceAll("'", "''")}'::jsonb,
-  '${JSON.stringify(form.policies).replaceAll("'", "''")}'::jsonb,
-  '${JSON.stringify(form.allowedDomains).replaceAll("'", "''")}'::jsonb,
+  '${escapeSql(form.businessId)}',
+  '${escapeSql(form.name)}',
+  '${escapeSql(form.timezone)}',
+  '${escapeSql(form.contact.phone)}',
+  '${escapeSql(form.contact.email)}',
+  '${escapeSql(form.contact.address)}',
+  '${escapeSql(JSON.stringify(form.hours))}'::jsonb,
+  '${escapeSql(JSON.stringify(form.services))}'::jsonb,
+  '${escapeSql(JSON.stringify(form.policies))}'::jsonb,
+  '${escapeSql(JSON.stringify(form.allowedDomains))}'::jsonb,
   'calendar',
-  '${JSON.stringify(form.faq || {}).replaceAll("'", "''")}'::jsonb,
-  '${JSON.stringify(form.styling || {}).replaceAll("'", "''")}'::jsonb,
+  '${escapeSql(JSON.stringify(form.faq || {}))}'::jsonb,
+  '${escapeSql(JSON.stringify(form.styling || {}))}'::jsonb,
   30, 10, 30, now()
 )
 on conflict (slug)
@@ -334,22 +361,33 @@ do update set
   updated_at = now();
 
 -- 2) Assign owner (owner must already exist in owner_accounts)
--- Replace owner username if needed
-with owner_row as (
-  select id as owner_id from owner_accounts where username = '${sqlOwnerUsername || 'owner_username_here'}'
-), business_row as (
-  select id as business_id from businesses where slug = '${form.businessId}'
-)
-delete from business_owners where owner_user_id in (select owner_id from owner_row);
+do $$
+declare
+  v_owner_id uuid;
+  v_business_id uuid;
+begin
+  select id into v_owner_id from owner_accounts where username = '${escapeSql(ownerUsernameForSql)}';
+  if v_owner_id is null then
+    raise exception 'owner username not found: %', '${escapeSql(ownerUsernameForSql)}';
+  end if;
 
-insert into business_owners (business_id, owner_user_id)
-select business_row.business_id, owner_row.owner_id
-from business_row, owner_row
-on conflict (business_id, owner_user_id) do nothing;
+  select id into v_business_id from businesses where slug = '${escapeSql(form.businessId)}';
+  if v_business_id is null then
+    raise exception 'business slug not found: %', '${escapeSql(form.businessId)}';
+  end if;
+
+  delete from business_owners where owner_user_id = v_owner_id;
+
+  insert into business_owners (business_id, owner_user_id)
+  values (v_business_id, v_owner_id)
+  on conflict (business_id, owner_user_id) do nothing;
+end $$;
 
 -- 3) Optional: disconnect connected calendar for this business
 delete from google_calendar_connections
-where business_id = (select id from businesses where slug = '${form.businessId}');`;
+where business_id = (select id from businesses where slug = '${escapeSql(form.businessId)}');
+
+commit;`;
 
   if (!adminToken) {
     return (
