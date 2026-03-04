@@ -6,7 +6,7 @@ import { isAdminAuthed } from '@/lib/adminAuth';
 const upsertSchema = z.object({
   username: z.string().trim().min(3).max(64),
   password: z.string().min(8).max(200),
-  businessId: z.string().trim().min(1).optional()
+  businessId: z.string().trim().min(1)
 });
 
 const actionSchema = z.discriminatedUnion('action', [
@@ -71,22 +71,26 @@ export async function POST(req: NextRequest) {
       .single();
     if (ownerErr || !owner) return NextResponse.json({ error: ownerErr?.message || 'Failed to create owner' }, { status: 400 });
 
-    if (parsed.businessId) {
-      const { data: business } = await supabase
-        .from('businesses')
-        .select('id')
-        .eq('slug', parsed.businessId)
-        .single();
-      if (!business) return NextResponse.json({ error: 'Business not found for assignment' }, { status: 404 });
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('slug', parsed.businessId)
+      .single();
+    if (!business) return NextResponse.json({ error: 'Business not found for assignment' }, { status: 404 });
 
-      const { error: linkErr } = await supabase
-        .from('business_owners')
-        .upsert(
-          { business_id: business.id, owner_user_id: owner.id },
-          { onConflict: 'business_id,owner_user_id' }
-        );
-      if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 400 });
-    }
+    const { error: unlinkErr } = await supabase
+      .from('business_owners')
+      .delete()
+      .eq('owner_user_id', owner.id);
+    if (unlinkErr) return NextResponse.json({ error: unlinkErr.message }, { status: 400 });
+
+    const { error: linkErr } = await supabase
+      .from('business_owners')
+      .upsert(
+        { business_id: business.id, owner_user_id: owner.id },
+        { onConflict: 'business_id,owner_user_id' }
+      );
+    if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 400 });
 
     return NextResponse.json({ ok: true, owner: { id: owner.id, username: owner.username } });
   } catch (error) {

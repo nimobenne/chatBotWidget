@@ -39,6 +39,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
     }
 
+    const existingConn = await getStore().getGoogleCalendarConnection(businessId);
+    if (existingConn) {
+      return NextResponse.json({ error: 'A calendar is already connected for this business.' }, { status: 409 });
+    }
+
     const nonce = randomUUID();
     const authUrl = getGoogleAuthUrl(businessId, nonce, hasBearer ? 'owner' : 'admin');
     const mode = req.nextUrl.searchParams.get('mode') || '';

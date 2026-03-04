@@ -110,13 +110,17 @@ export default function AdminPage() {
 
   async function saveOwner() {
     try {
+      if (!ownerForm.businessId) {
+        setMessage('Select a business to assign this owner.');
+        return;
+      }
       const res = await fetch('/api/admin/owners', {
         method: 'POST',
         headers: adminHeaders(true),
         body: JSON.stringify({
           username: ownerForm.username,
           password: ownerForm.password,
-          businessId: ownerForm.businessId.trim() || undefined
+          businessId: ownerForm.businessId
         })
       });
       const data = await res.json();
@@ -409,11 +413,16 @@ export default function AdminPage() {
       </pre>
 
       <h3 style={{ marginTop: 16 }}>Owner Accounts</h3>
-      <p style={{ marginTop: 0, color: '#475569' }}>Create username/password credentials and optionally assign a business.</p>
+      <p style={{ marginTop: 0, color: '#475569' }}>Create username/password credentials and assign exactly one business.</p>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 2fr auto', gap: 8, marginBottom: 10 }}>
         <input value={ownerForm.username} onChange={(e) => setOwnerForm({ ...ownerForm, username: e.target.value })} placeholder="owner username" />
         <input type="password" value={ownerForm.password} onChange={(e) => setOwnerForm({ ...ownerForm, password: e.target.value })} placeholder="temporary password" />
-        <input value={ownerForm.businessId} onChange={(e) => setOwnerForm({ ...ownerForm, businessId: e.target.value })} placeholder="optional business id" />
+        <select value={ownerForm.businessId} onChange={(e) => setOwnerForm({ ...ownerForm, businessId: e.target.value })}>
+          <option value="">Select business</option>
+          {businesses.map((b) => (
+            <option key={b.businessId} value={b.businessId}>{b.businessId} - {b.name}</option>
+          ))}
+        </select>
         <button onClick={saveOwner}>Save Owner</button>
       </div>
       {owners.length ? (
