@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       end: `${parsed.date}T23:59:59.999Z`
     });
 
-    return NextResponse.json({ slots });
+    return NextResponse.json({ slots, timezone: business.timezone });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     return NextResponse.json({ error: message }, { status: 400 });

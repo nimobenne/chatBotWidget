@@ -21,7 +21,8 @@
     selectedSlotISO: '',
     customerName: '',
     customerEmail: '',
-    slots: []
+    slots: [],
+    timezone: ''
   };
   let booking = loadBooking();
 
@@ -59,6 +60,10 @@
     .panel.open { display:flex }
     .head { padding:12px 14px;background:${accent};color:#fff;font-weight:600;display:flex;justify-content:space-between;align-items:center }
     .minimize { background:transparent;border:0;color:#fff;cursor:pointer;font-size:18px;padding:0 }
+    .progress { display:none;padding:8px 10px;border-bottom:1px solid #e5e7eb;background:#fff;font-size:11px;color:#6b7280;gap:6px;flex-wrap:wrap }
+    .progress.open { display:flex }
+    .progress .chip { padding:2px 8px;border-radius:10px;background:#eef2ff;border:1px solid #dbeafe }
+    .progress .chip.active { background:${accent}; color:#fff; border-color:${accent} }
     .msgs { flex:1;overflow:auto;padding:10px;background:#f8fafc }
     .row { margin:8px 0; display:flex }
     .u{justify-content:flex-end}.a{justify-content:flex-start}
@@ -67,6 +72,7 @@
     .quick { display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-top:1px solid #e5e7eb;background:#fff }
     .quick button { padding:7px 10px;border-radius:16px;border:1px solid ${accent};background:#fff;color:${accent};font-size:12px;cursor:pointer }
     .quick button.primary { background:${accent};color:#fff }
+    .quick button.ghost { border-color:#d1d5db;color:#374151 }
     .composer{display:flex;gap:6px;padding:10px;border-top:1px solid #e5e7eb}
     .input{flex:1;padding:8px;border:1px solid #d1d5db;border-radius:8px}
     .send{padding:8px 12px;border:0;border-radius:8px;background:${accent};color:#fff;cursor:pointer}
@@ -81,7 +87,7 @@
 
   const panel = document.createElement('div');
   panel.className = 'panel';
-  panel.innerHTML = '<div class="head"><span>Chat with us</span><button class="minimize" aria-label="Minimize">−</button></div><div class="msgs"></div><div class="quick"></div><div class="composer"><input class="input" placeholder="Type a message..."/><button class="send">Send</button></div>';
+  panel.innerHTML = '<div class="head"><span>Chat with us</span><button class="minimize" aria-label="Minimize">−</button></div><div class="progress"></div><div class="msgs"></div><div class="quick"></div><div class="composer"><input class="input" placeholder="Type a message..."/><button class="send">Send</button></div>';
 
   shadow.appendChild(style);
   shadow.appendChild(panel);
@@ -89,9 +95,33 @@
 
   const msgs = panel.querySelector('.msgs');
   const quick = panel.querySelector('.quick');
+  const progress = panel.querySelector('.progress');
   const input = panel.querySelector('.input');
   const send = panel.querySelector('.send');
   const minimize = panel.querySelector('.minimize');
+
+  function renderProgress() {
+    const steps = ['service', 'datetime', 'name', 'email'];
+    if (!booking.active || steps.indexOf(booking.step) === -1) {
+      progress.classList.remove('open');
+      progress.innerHTML = '';
+      return;
+    }
+    progress.classList.add('open');
+    const labels = {
+      service: 'Service',
+      datetime: 'Time',
+      pickSlot: 'Pick Slot',
+      name: 'Name',
+      email: 'Email'
+    };
+    progress.innerHTML = [
+      `<span class="chip ${booking.step === 'service' ? 'active' : ''}">${labels.service}</span>`,
+      `<span class="chip ${(booking.step === 'datetime' || booking.step === 'pickSlot') ? 'active' : ''}">${labels.datetime}</span>`,
+      `<span class="chip ${booking.step === 'name' ? 'active' : ''}">${labels.name}</span>`,
+      `<span class="chip ${booking.step === 'email' ? 'active' : ''}">${labels.email}</span>`
+    ].join('');
+  }
 
   function addMsg(text, who) {
     const row = document.createElement('div');
@@ -123,6 +153,7 @@
       const b = document.createElement('button');
       b.textContent = item.label;
       if (item.primary) b.className = 'primary';
+      if (item.ghost) b.className = `${b.className ? `${b.className} ` : ''}ghost`;
       b.onclick = item.onClick;
       quick.appendChild(b);
     });
@@ -141,29 +172,80 @@
     const t = text.toLowerCase();
     const now = new Date();
     const d = new Date();
-    if (t.includes('tomorrow') || t.includes('tmrw')) d.setDate(now.getDate() + 1);
-    else if (t.includes('today')) d.setDate(now.getDate());
-    else {
-      const date = text.match(/(\d{4}-\d{2}-\d{2})/);
-      if (date) {
-        const parsed = new Date(`${date[1]}T00:00:00`);
-        if (!Number.isNaN(parsed.getTime())) d.setTime(parsed.getTime());
+    const weekdays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    if (t.includes('tomorrow') || t.includes('tmrw')) {
+      d.setDate(now.getDate() + 1);
+    } else if (t.includes('today')) {
+      d.setDate(now.getDate());
+    } else {
+      const inDays = t.match(/in\s+(\d+)\s+days?/);
+      if (inDays) {
+        d.setDate(now.getDate() + Number(inDays[1]));
+      } else {
+        const nextDay = weekdays.find((w) => t.includes(`next ${w}`));
+        if (nextDay) {
+          const target = weekdays.indexOf(nextDay);
+          const delta = ((target - now.getDay() + 7) % 7) || 7;
+          d.setDate(now.getDate() + delta + 7);
+        } else {
+          const dayWord = weekdays.find((w) => t.includes(w));
+          if (dayWord) {
+            const target = weekdays.indexOf(dayWord);
+            const delta = ((target - now.getDay() + 7) % 7) || 7;
+            d.setDate(now.getDate() + delta);
+          } else {
+            const date = text.match(/(\d{4}-\d{2}-\d{2})/);
+            if (date) {
+              const parsed = new Date(`${date[1]}T00:00:00`);
+              if (!Number.isNaN(parsed.getTime())) d.setTime(parsed.getTime());
+            }
+          }
+        }
       }
     }
-    const time = t.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+    const compact = t.match(/\b(\d{1,2})(\d{2})\s*(am|pm)\b/);
+    const time = compact
+      ? [compact[0], compact[1], compact[2], compact[3]]
+      : t.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
     if (!time) return null;
     let hh = Number(time[1]);
     const mm = Number(time[2] || '0');
     const ap = time[3];
     if (ap === 'pm' && hh < 12) hh += 12;
     if (ap === 'am' && hh === 12) hh = 0;
+    if (!ap && t.includes('evening') && hh < 12) hh += 12;
+    if (!ap && t.includes('afternoon') && hh < 12) hh += 12;
     d.setHours(hh, mm, 0, 0);
     if (Number.isNaN(d.getTime())) return null;
     return d;
   }
 
+  function goBackStep() {
+    if (!booking.active) return;
+    if (booking.step === 'email') {
+      booking.step = 'name';
+      booking.customerEmail = '';
+      addMsg("No problem. What's your full name?", 'a');
+    } else if (booking.step === 'name') {
+      booking.step = booking.slots.length ? 'pickSlot' : 'datetime';
+      booking.customerName = '';
+      addMsg('Sure - pick a time again.', 'a');
+    } else if (booking.step === 'pickSlot') {
+      booking.step = 'datetime';
+      addMsg('Okay, what date/time would you like instead?', 'a');
+    } else if (booking.step === 'datetime') {
+      booking.step = 'service';
+      booking.dateISO = '';
+      booking.selectedSlotISO = '';
+      addMsg('Got it. Which service do you want?', 'a');
+    }
+    saveBooking();
+    bookingButtons();
+  }
+
   function bookingButtons() {
     if (!booking.active) {
+      renderProgress();
       setQuickButtons([
         { label: 'Book Appointment', primary: true, onClick: startBooking },
         { label: 'Hours', onClick: () => sendToChat('What are your hours?') },
@@ -177,8 +259,9 @@
         { label: 'Classic Haircut', primary: true, onClick: () => handleBookingInput('Classic Haircut') },
         { label: 'Skin Fade', onClick: () => handleBookingInput('Skin Fade') },
         { label: 'Beard Trim', onClick: () => handleBookingInput('Beard Trim') },
-        { label: 'Switch to chat', onClick: switchToChat }
+        { label: 'Switch to chat', onClick: switchToChat, ghost: true }
       ]);
+      renderProgress();
       return;
     }
     if (booking.step === 'datetime') {
@@ -186,8 +269,10 @@
         { label: 'Tomorrow 3:00 PM', primary: true, onClick: () => handleBookingInput('tomorrow 3pm') },
         { label: 'Tomorrow 4:00 PM', onClick: () => handleBookingInput('tomorrow 4pm') },
         { label: 'Tomorrow 5:00 PM', onClick: () => handleBookingInput('tomorrow 5pm') },
-        { label: 'Switch to chat', onClick: switchToChat }
+        { label: 'Back', onClick: goBackStep, ghost: true },
+        { label: 'Switch to chat', onClick: switchToChat, ghost: true }
       ]);
+      renderProgress();
       return;
     }
     if (booking.step === 'pickSlot') {
@@ -203,17 +288,22 @@
           saveBooking();
           addMsg('No problem - what date and time would you prefer?', 'a');
           bookingButtons();
-        } }
+        } },
+        { label: 'Back', onClick: goBackStep, ghost: true }
       ]);
+      renderProgress();
       return;
     }
     if (booking.step === 'name' || booking.step === 'email') {
       setQuickButtons([
-        { label: 'Switch to chat', onClick: switchToChat },
-        { label: 'Cancel booking', onClick: cancelBooking }
+        { label: 'Back', onClick: goBackStep, ghost: true },
+        { label: 'Switch to chat', onClick: switchToChat, ghost: true },
+        { label: 'Cancel booking', onClick: cancelBooking, ghost: true }
       ]);
+      renderProgress();
       return;
     }
+    renderProgress();
     setQuickButtons([{ label: 'Book Appointment', primary: true, onClick: startBooking }]);
   }
 
@@ -306,6 +396,7 @@
       }
       booking.dateISO = dateISO;
       booking.slots = data.slots || [];
+      booking.timezone = data.timezone || booking.timezone;
       const match = booking.slots.find((iso) => {
         const s = new Date(iso);
         return s.getHours() === dt.getHours() && s.getMinutes() === dt.getMinutes();
@@ -314,7 +405,8 @@
         booking.selectedSlotISO = match;
         booking.step = 'name';
         saveBooking();
-        addMsg(`Great, ${new Date(match).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} is available. What's your full name?`, 'a');
+        const tz = booking.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        addMsg(`Great, ${new Date(match).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} is available (${tz}). What's your full name?`, 'a');
         bookingButtons();
         return;
       }
@@ -325,7 +417,8 @@
       }
       booking.step = 'pickSlot';
       saveBooking();
-      addMsg('That exact time is unavailable. Please choose one of these open times:', 'a');
+      const tz = booking.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      addMsg(`That exact time is unavailable. Please choose one of these open times (${tz}):`, 'a');
       bookingButtons();
       return;
     }
@@ -403,6 +496,7 @@
   function handleSend() {
     const text = input.value.trim();
     if (!text) return;
+    input.value = '';
     if (booking.active) {
       handleBookingInput(text);
     } else {
