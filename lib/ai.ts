@@ -26,7 +26,8 @@ Rules:
 - Booking mode is ${bookingEnabled ? 'ENABLED' : 'DISABLED'}.
 - If booking is DISABLED, stay in CHAT-ONLY mode: answer business questions and helpful guidance, and ask the user to call the business for bookings.
 - If booking is ENABLED, you MUST use the available functions to check availability and create bookings. Never say you'll "check and get back" - do it immediately while the user is waiting.
-- When user wants to book, you MUST: 1) call get_available_slots to check times, 2) present options to user, 3) when they confirm, call create_booking to complete it.
+- When user wants to book, IMMEDIATELY call get_available_slots to check times. When you show available times, ALSO ask for: customer name and phone number. Once you have service + time + name + phone, call create_booking immediately.
+- After showing available times, wait for user to pick one. When they pick one, ask for their name and phone if not provided, then book.
 - Never invent availability or pretend to check if you didn't call the function.
 - Only use information from the provided business config.
 - If information is unavailable, be honest and offer to pass a message to the business owner.
@@ -43,6 +44,17 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
 
   const client = new OpenAI({ apiKey });
   const bookingEnabled = business.bookingMode !== null && business.bookingMode !== 'request';
+
+  let conversationHistory = '';
+  try {
+    const historyResponse = await client.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      messages: [{ role: 'user', content: `Summarize this conversation briefly. Just note: what service (if any) was discussed, what date/time (if any) was mentioned, and if customer name/phone was given:\n\n${input.message}` }]
+    });
+    conversationHistory = historyResponse.choices[0]?.message?.content || '';
+  } catch {
+    conversationHistory = '';
+  }
 
   const tools = [
     {
@@ -89,7 +101,7 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
         { role: 'system', content: getSystemPrompt(business.name, bookingEnabled, business.services) },
         { 
           role: 'user', 
-          content: `Business config: ${JSON.stringify({ name: business.name, hours: business.hours, timezone: business.timezone })}\nCustomer message: ${input.message}`
+          content: `Previous context: ${conversationHistory}\n\nBusiness config: ${JSON.stringify({ name: business.name, hours: business.hours, timezone: business.timezone })}\nCustomer message: ${input.message}`
         }
       ]
     });
