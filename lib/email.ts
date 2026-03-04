@@ -1,6 +1,13 @@
 import { Resend } from 'resend';
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+function getResend() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log('RESEND_API_KEY not set, skipping email send');
+    return null;
+  }
+  return new Resend(apiKey);
+}
 
 export interface BookingEmailParams {
   to: string;
@@ -13,8 +20,8 @@ export interface BookingEmailParams {
 }
 
 export async function sendBookingConfirmation(params: BookingEmailParams) {
+  const resend = getResend();
   if (!resend) {
-    console.log('RESEND_API_KEY not set, skipping email send');
     return;
   }
 
