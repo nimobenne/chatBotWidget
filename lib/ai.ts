@@ -15,42 +15,26 @@ export function validateChatInput(payload: unknown) {
   return inputSchema.parse(payload);
 }
 
-function getSystemPrompt(businessName: string, bookingEnabled: boolean, services: { name: string; durationMin: number; priceRange?: string }[], phone: string) {
+function getSystemPrompt(businessName: string, services: { name: string; durationMin: number; priceRange?: string }[], phone: string) {
   const serviceList = services.map(s => `- ${s.name} (${s.durationMin} min${s.priceRange ? ` - ${s.priceRange}` : ''})`).join('\n');
-  const serviceAliases = services.map(s => {
-    const lower = s.name.toLowerCase();
-    if (lower.includes('classic haircut')) return `${s.name}: haircut, cut, hair`;
-    if (lower.includes('skin fade')) return `${s.name}: fade, skin fade`;
-    if (lower.includes('beard trim')) return `${s.name}: beard, trim`;
-    return `${s.name}: ${lower}`;
-  }).join('\n');
   
-  return `You are ${businessName}'s receptionist. Help customers book appointments.
+  return `You are a friendly receptionist for ${businessName}.
 
-SERVICES:
+SERVICES OFFERED:
 ${serviceList}
 
-SERVICE ALIASES (map these to actual services):
-${serviceAliases}
+MAPPING: haircut=Classic Haircut, fade=Skin Fade, beard=Beard Trim
 
-HOW TO BOOK (follow exactly):
+BOOKING STEPS (do them in order):
+1. Ask what service if not given
+2. Ask what date/time if not given  
+3. Call get_available_slots to check times
+4. Show times, ask which they want
+5. Ask for name and email
+6. Call create_booking
+7. Confirm and say goodbye
 
-1. If customer wants to book, FIRST ask: "What service would you like?" - wait for answer
-2. Then ask: "What date and time works for you?" - wait for answer  
-3. Call get_available_slots function with their service and date
-4. Tell them the available times
-5. Ask: "What time works best?" - wait for answer
-6. Ask: "What's your name and email to confirm?" - wait for answer
-7. Call create_booking function with all info
-8. Say: "Your booking is confirmed! Check your email for details."
-
-RULES:
-- Map "haircut" to "Classic Haircut", "fade" to "Skin Fade", "beard" to "Beard Trim"
-- Ask ONE question at a time. Wait for answer before next step.
-- If online booking is disabled, say: "I'm sorry, please call ${phone} to book."
-- Do NOT call create_booking until you have: service + date/time + name + email
-- Do NOT ask for name/email before checking availability
-- Keep responses short (1-2 sentences)`;
+CRITICAL: If user already told you the service, move to next step. Don't ask again. Same for date/time. Only ask for missing info.`;
 }
 
 export async function runAssistant(input: { businessId: string; sessionId: string; message: string }) {
@@ -62,19 +46,18 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
   if (!business) throw new Error('Unknown businessId.');
 
   const client = new OpenAI({ apiKey });
-  const bookingEnabled = business.bookingMode !== null && business.bookingMode !== 'request';
 
   const tools = [
     {
       type: 'function' as const,
       function: {
         name: 'get_available_slots',
-        description: 'Check available times for a service on a date',
+        description: 'Check available times',
         parameters: {
           type: 'object',
           properties: {
-            serviceName: { type: 'string', description: 'Service name like "Classic Haircut"' },
-            date: { type: 'string', description: 'Date like "2026-03-05" or "tomorrow"' }
+            serviceName: { type: 'string' },
+            date: { type: 'string' }
           },
           required: ['serviceName', 'date']
         }
@@ -84,12 +67,12 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
       type: 'function' as const,
       function: {
         name: 'create_booking',
-        description: 'Book an appointment - only call when you have ALL info',
+        description: 'Create booking - requires service, dateTime, name, phone, email',
         parameters: {
           type: 'object',
           properties: {
             serviceName: { type: 'string' },
-            dateTime: { type: 'string', description: 'ISO format like "2026-03-05T15:00:00"' },
+            dateTime: { type: 'string' },
             customerName: { type: 'string' },
             customerPhone: { type: 'string' },
             customerEmail: { type: 'string' }
@@ -100,12 +83,14 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
     }
   ];
 
+  const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [];
+
   try {
     const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      tools: bookingEnabled ? tools : undefined,
+      model: 'gpt-4o',
+      tools,
       messages: [
-        { role: 'system', content: getSystemPrompt(business.name, bookingEnabled, business.services, business.contact.phone) },
+        { role: 'system', content: getSystemPrompt(business.name, business.services, business.contact.phone) },
         { role: 'user', content: input.message }
       ]
     });
