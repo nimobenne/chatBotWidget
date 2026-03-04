@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStore } from '@/lib/store';
 import { exchangeCodeForTokens } from '@/lib/calendar';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
