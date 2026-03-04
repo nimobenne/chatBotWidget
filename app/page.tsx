@@ -4,6 +4,7 @@ const links = [
   { href: '/', label: 'Home' },
   { href: '/demo?biz=demo_barber', label: 'Demo Widget' },
   { href: '/admin', label: 'Admin' },
+  { href: '/owner', label: 'Owner Portal' },
   { href: '/api/widget/config?businessId=demo_barber', label: 'Widget Config API' },
   { href: '/api/businesses?password=password', label: 'Businesses API' }
 ];
