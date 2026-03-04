@@ -20,10 +20,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/admin?error=missing_params', req.url));
     }
 
-    const [businessId, expectedState] = state.split(':');
-    const currentState = searchParams.get('state_param') || '';
+    const [businessId, returnedNonce] = state.split(':');
+    if (!businessId || !returnedNonce) {
+      return NextResponse.redirect(new URL('/admin?error=invalid_state', req.url));
+    }
 
-    if (currentState && currentState !== expectedState) {
+    const cookieNonce = req.cookies.get('google_oauth_state')?.value || '';
+    if (!cookieNonce || cookieNonce !== returnedNonce) {
       return NextResponse.redirect(new URL('/admin?error=invalid_state', req.url));
     }
 
@@ -38,7 +41,9 @@ export async function GET(req: NextRequest) {
       scope: tokens.scope
     });
 
-    return NextResponse.redirect(new URL('/admin?success=calendar_connected', req.url));
+    const res = NextResponse.redirect(new URL('/admin?success=calendar_connected', req.url));
+    res.cookies.set('google_oauth_state', '', { maxAge: 0, path: '/' });
+    return res;
   } catch (err) {
     console.error('Google OAuth callback error:', err);
     return NextResponse.redirect(new URL('/admin?error=token_exchange_failed', req.url));

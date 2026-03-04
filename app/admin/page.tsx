@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [businesses, setBusinesses] = useState<unknown[]>([]);
+  const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [editor, setEditor] = useState('');
   const [message, setMessage] = useState('');
 
@@ -15,9 +16,20 @@ export default function AdminPage() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed');
         setBusinesses(data.businesses || []);
+        const firstId = data.businesses?.[0]?.businessId;
+        if (firstId) setSelectedBusinessId((prev) => prev || firstId);
       })
       .catch((e) => setMessage(String(e.message || e)));
   }, [password]);
+
+  function connectGoogleCalendar() {
+    if (!password || !selectedBusinessId) {
+      setMessage('Set admin password and select a business first.');
+      return;
+    }
+    const url = `/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&password=${encodeURIComponent(password)}`;
+    window.location.href = url;
+  }
 
   async function save() {
     try {
@@ -42,6 +54,16 @@ export default function AdminPage() {
       <input type="password" placeholder="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ padding: 8, minWidth: 320 }} />
       <h3>Businesses</h3>
       <pre style={{ background: '#0f172a', color: '#e2e8f0', padding: 12, borderRadius: 8, minHeight: 220 }}>{JSON.stringify(businesses, null, 2)}</pre>
+      <h3>Google Calendar</h3>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <select value={selectedBusinessId} onChange={(e) => setSelectedBusinessId(e.target.value)} style={{ padding: 8, minWidth: 220 }}>
+          <option value="">Select business</option>
+          {businesses.map((b: any) => (
+            <option key={b.businessId} value={b.businessId}>{b.businessId} - {b.name}</option>
+          ))}
+        </select>
+        <button onClick={connectGoogleCalendar} style={{ padding: '8px 14px' }}>Connect Calendar</button>
+      </div>
       <h3>Edit/Create Business Config JSON</h3>
       <textarea rows={18} value={editor} onChange={(e) => setEditor(e.target.value)} style={{ width: '100%', fontFamily: 'monospace' }} />
       <br />
