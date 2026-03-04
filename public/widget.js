@@ -187,15 +187,15 @@
           showQuickReply(tomorrowStr + ' 4pm', 'Tomorrow at 4pm');
           showQuickReply(tomorrowStr + ' 5pm', 'Tomorrow at 5pm');
           showQuickReply('Pick my own time', 'Let me pick a time');
-        } else if (response.toLowerCase().includes('name and email') || response.toLowerCase().includes('confirm')) {
+        } else         if (response.toLowerCase().includes('name and email') || response.toLowerCase().includes('confirm')) {
           const inputArea = document.createElement('div');
           inputArea.className = 'form-group';
+          inputArea.style.padding = '10px';
           inputArea.innerHTML = `
-            <label>Your name</label>
-            <input class="name-input" placeholder="John Smith"/>
-            <label>Email</label>
-            <input class="email-input" placeholder="john@example.com"/>
-            <button class="confirm-btn">Confirm Booking</button>
+            <input class="name-input" placeholder="Your name" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:8px;box-sizing:border-box"/>
+            <input class="email-input" placeholder="Your email" type="email" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:8px;box-sizing:border-box"/>
+            <button class="confirm-btn" style="width:100%;padding:10px;background:${accent};color:#fff;border:0;border-radius:6px;cursor:pointer">Confirm Booking</button>
+            <p style="font-size:12px;color:#6b7280;margin:8px 0 0;text-align:center">Or type your name and email below</p>
           `;
           quickOptions.appendChild(inputArea);
           
@@ -203,11 +203,14 @@
           const emailInput = inputArea.querySelector('.email-input');
           const confirmBtn = inputArea.querySelector('.confirm-btn');
           
-          confirmBtn.onclick = () => {
+          confirmBtn.onclick = (e) => {
+            e.stopPropagation();
             const name = nameInput.value.trim();
             const email = emailInput.value.trim();
             if (name && email) {
               sendMessage(`My name is ${name} and my email is ${email}`);
+            } else {
+              alert('Please enter both name and email');
             }
           };
         } else if (response.includes('✅') || response.toLowerCase().includes('confirmed')) {
