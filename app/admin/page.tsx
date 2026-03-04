@@ -271,13 +271,37 @@ export default function AdminPage() {
       setMessage('Sign in and select a business first.');
       return;
     }
-    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(form.businessId)}&mode=url`, {
+    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(form.businessId)}&mode=url&reconnect=1`, {
       headers: adminHeaders()
     })
       .then(async (r) => {
         const data = await readJsonSafe(r);
         if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
         window.location.href = data.url;
+      })
+      .catch((e) => setMessage(String(e.message || e)));
+  }
+
+  function checkCalendarStatus() {
+    if (!adminToken || !form.businessId) {
+      setMessage('Sign in and select a business first.');
+      return;
+    }
+    fetch(`/api/auth/google/status?businessId=${encodeURIComponent(form.businessId)}`, {
+      headers: adminHeaders()
+    })
+      .then(async (r) => {
+        const data = await readJsonSafe(r);
+        if (!r.ok) throw new Error(data.error || 'Failed to check calendar status');
+        if (!data.connectedInDb) {
+          setMessage(`No calendar connection row exists for ${form.businessId}.`);
+          return;
+        }
+        if (data.usable) {
+          setMessage(`Calendar connected for ${form.businessId}. calendarId=${data.calendarId}. updatedAt=${data.updatedAt}`);
+          return;
+        }
+        setMessage(`Calendar row exists for ${form.businessId}, but token is not usable. ${data.checkError || ''}`.trim());
       })
       .catch((e) => setMessage(String(e.message || e)));
   }
@@ -392,6 +416,7 @@ commit;`;
         </select>
         <button onClick={startNewBusiness} style={{ padding: '8px 14px' }}>New Business</button>
         <button onClick={connectGoogleCalendar} style={{ padding: '8px 14px' }}>Connect Calendar</button>
+        <button onClick={checkCalendarStatus} style={{ padding: '8px 14px' }}>Check Calendar Status</button>
         <button onClick={() => { setAdminToken(''); setPassword(''); }} style={{ padding: '8px 14px' }}>Sign Out</button>
       </div>
 

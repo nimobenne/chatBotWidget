@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const businessId = req.nextUrl.searchParams.get('businessId') || '';
+    const reconnect = req.nextUrl.searchParams.get('reconnect') === '1';
     if (!businessId) {
       return NextResponse.json({ error: 'businessId is required' }, { status: 400 });
     }
@@ -39,9 +40,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
     }
 
-    const existingConn = await getStore().getGoogleCalendarConnection(businessId);
+    const store = getStore();
+    const existingConn = await store.getGoogleCalendarConnection(businessId);
     if (existingConn) {
-      return NextResponse.json({ error: 'A calendar is already connected for this business.' }, { status: 409 });
+      if (!reconnect) {
+        return NextResponse.json({ error: 'A calendar is already connected for this business. Use reconnect=1 to replace it.' }, { status: 409 });
+      }
+      await store.removeGoogleCalendarConnection(businessId);
     }
 
     const nonce = randomUUID();

@@ -93,13 +93,34 @@ export default function OwnerPage() {
 
   function connectCalendar() {
     if (!selectedBusinessId || !token) return;
-    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&mode=url`, {
+    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&mode=url&reconnect=1`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
         window.location.href = data.url;
+      })
+      .catch((e) => setMsg(String(e.message || e)));
+  }
+
+  function checkCalendarStatus() {
+    if (!selectedBusinessId || !token) return;
+    fetch(`/api/auth/google/status?businessId=${encodeURIComponent(selectedBusinessId)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to check calendar status');
+        if (!data.connectedInDb) {
+          setMsg(`No calendar connection row exists for ${selectedBusinessId}.`);
+          return;
+        }
+        if (data.usable) {
+          setMsg(`Calendar connected for ${selectedBusinessId}. calendarId=${data.calendarId}.`);
+          return;
+        }
+        setMsg(`Calendar row exists but token is not usable. ${data.checkError || ''}`.trim());
       })
       .catch((e) => setMsg(String(e.message || e)));
   }
@@ -151,6 +172,7 @@ export default function OwnerPage() {
             ))}
           </select>
           <button onClick={connectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Connect Calendar</button>
+          <button onClick={checkCalendarStatus} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Check Calendar Status</button>
         </div>
         {selected ? (
           <div style={{ fontSize: 14 }}>
