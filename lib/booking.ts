@@ -1,5 +1,6 @@
 import { getStore } from './store';
 import { BookingRecord, BusinessConfig, Service } from './types';
+import { createCalendarEvent } from './calendar';
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -73,7 +74,7 @@ export async function createBookingRecord(params: {
     }
   }
 
-  return store.createBooking({
+  const booking = await store.createBooking({
     businessId: params.business.businessId,
     serviceName: params.serviceName,
     startTimeISO: start.toISOString(),
@@ -84,4 +85,17 @@ export async function createBookingRecord(params: {
     status: params.status,
     notes: params.notes
   });
+
+  if (params.status === 'confirmed') {
+    try {
+      const calendarResult = await createCalendarEvent(booking, params.business);
+      if (calendarResult) {
+        console.log('Calendar event created:', calendarResult.htmlLink);
+      }
+    } catch (error) {
+      console.error('Failed to create calendar event:', error);
+    }
+  }
+
+  return booking;
 }

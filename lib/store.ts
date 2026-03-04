@@ -16,6 +16,8 @@ export interface DataStore {
   createBooking(record: Omit<BookingRecord, 'bookingId' | 'createdAt'>): Promise<BookingRecord>;
   createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord>;
   logConversation(log: ConversationLog): Promise<void>;
+  getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null>;
+  saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void>;
 }
 
 async function readJson<T>(filePath: string, fallback: T): Promise<T> {
@@ -86,6 +88,14 @@ class JsonDataStore implements DataStore {
     logs.push(log);
     await writeJson(CONVERSATIONS_PATH, logs);
   }
+
+  async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {
+    return null;
+  }
+
+  async saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void> {
+    // Not implemented for JSON store
+  }
 }
 
 interface SupabaseBusiness {
@@ -146,6 +156,16 @@ interface SupabaseConversation {
   last_assistant_message: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface GoogleCalendarConnection {
+  businessId: string;
+  calendarId: string;
+  refreshToken: string;
+  tokenType: string;
+  scope: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 function toBusinessConfig(sb: SupabaseBusiness): BusinessConfig {
@@ -324,6 +344,48 @@ class SupabaseDataStore implements DataStore {
     }, { onConflict: 'business_id, session_id' });
     
     if (error) console.error('Failed to log conversation:', error.message);
+  }
+
+  async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {
+    const businessDbId = await this.getBusinessDbId(businessId);
+    if (!businessDbId) return null;
+    
+    const { data, error } = await this.client
+      .from('google_calendar_connections')
+      .select('*')
+      .eq('business_id', businessDbId)
+      .single();
+    
+    if (error || !data) return null;
+    
+    return {
+      businessId: businessId,
+      calendarId: data.calendar_id,
+      refreshToken: data.refresh_token,
+      tokenType: data.token_type,
+      scope: data.scope,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+  }
+
+  async saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void> {
+    const businessDbId = await this.getBusinessDbId(conn.businessId);
+    if (!businessDbId) throw new Error('Business not found');
+    
+    const now = new Date().toISOString();
+    const { error } = await this.client
+      .from('google_calendar_connections')
+      .upsert({
+        business_id: businessDbId,
+        calendar_id: conn.calendarId,
+        refresh_token: conn.refreshToken,
+        token_type: conn.tokenType,
+        scope: conn.scope,
+        updated_at: now
+      }, { onConflict: 'business_id' });
+    
+    if (error) throw new Error(error.message);
   }
 }
 
