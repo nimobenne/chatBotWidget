@@ -150,6 +150,24 @@ export default function OwnerPage() {
       .catch((e) => setMsg(String(e.message || e)));
   }
 
+  function disconnectCalendar() {
+    if (!selectedBusinessId || !token) return;
+    fetch('/api/auth/google/disconnect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ businessId: selectedBusinessId })
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
+        setMsg(`Calendar disconnected for ${selectedBusinessId}.`);
+      })
+      .catch((e) => setMsg(String(e.message || e)));
+  }
+
   if (!token) {
     return (
       <main style={{ maxWidth: 520, margin: '50px auto', padding: 20 }}>
@@ -224,6 +242,7 @@ export default function OwnerPage() {
             ))}
           </select>
           <button onClick={connectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Connect Calendar</button>
+          <button onClick={disconnectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Disconnect Calendar</button>
         </div>
         {selected ? (
           <div style={{ fontSize: 14 }}>

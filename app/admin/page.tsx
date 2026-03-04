@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [owners, setOwners] = useState<any[]>([]);
   const [ownerForm, setOwnerForm] = useState({ username: '', password: '', businessId: '' });
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [sqlOwnerUsername, setSqlOwnerUsername] = useState('');
 
   function adminHeaders(includeJson = false) {
     return {
@@ -277,6 +278,79 @@ export default function AdminPage() {
       .catch((e) => setMessage(String(e.message || e)));
   }
 
+  function disconnectGoogleCalendar() {
+    if (!adminToken || !form.businessId) {
+      setMessage('Sign in and select a business first.');
+      return;
+    }
+    fetch('/api/auth/google/disconnect', {
+      method: 'POST',
+      headers: adminHeaders(true),
+      body: JSON.stringify({ businessId: form.businessId })
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to disconnect calendar');
+        setMessage(`Calendar disconnected for ${form.businessId}.`);
+      })
+      .catch((e) => setMessage(String(e.message || e)));
+  }
+
+  const sqlTemplate = `-- 1) Upsert business config
+insert into businesses (
+  slug, name, timezone, phone, email, address,
+  hours, services, policies, allowed_domains, booking_mode, faqs, widget_style,
+  slot_interval_min, buffer_min, booking_window_days, updated_at
+) values (
+  '${form.businessId}',
+  '${form.name.replaceAll("'", "''")}',
+  '${form.timezone}',
+  '${(form.contact.phone || '').replaceAll("'", "''")}',
+  '${(form.contact.email || '').replaceAll("'", "''")}',
+  '${(form.contact.address || '').replaceAll("'", "''")}',
+  '${JSON.stringify(form.hours).replaceAll("'", "''")}'::jsonb,
+  '${JSON.stringify(form.services).replaceAll("'", "''")}'::jsonb,
+  '${JSON.stringify(form.policies).replaceAll("'", "''")}'::jsonb,
+  '${JSON.stringify(form.allowedDomains).replaceAll("'", "''")}'::jsonb,
+  'calendar',
+  '${JSON.stringify(form.faq || {}).replaceAll("'", "''")}'::jsonb,
+  '${JSON.stringify(form.styling || {}).replaceAll("'", "''")}'::jsonb,
+  30, 10, 30, now()
+)
+on conflict (slug)
+do update set
+  name = excluded.name,
+  timezone = excluded.timezone,
+  phone = excluded.phone,
+  email = excluded.email,
+  address = excluded.address,
+  hours = excluded.hours,
+  services = excluded.services,
+  policies = excluded.policies,
+  allowed_domains = excluded.allowed_domains,
+  booking_mode = 'calendar',
+  faqs = excluded.faqs,
+  widget_style = excluded.widget_style,
+  updated_at = now();
+
+-- 2) Assign owner (owner must already exist in owner_accounts)
+-- Replace owner username if needed
+with owner_row as (
+  select id as owner_id from owner_accounts where username = '${sqlOwnerUsername || 'owner_username_here'}'
+), business_row as (
+  select id as business_id from businesses where slug = '${form.businessId}'
+)
+delete from business_owners where owner_user_id in (select owner_id from owner_row);
+
+insert into business_owners (business_id, owner_user_id)
+select business_row.business_id, owner_row.owner_id
+from business_row, owner_row
+on conflict (business_id, owner_user_id) do nothing;
+
+-- 3) Optional: disconnect connected calendar for this business
+delete from google_calendar_connections
+where business_id = (select id from businesses where slug = '${form.businessId}');`;
+
   if (!adminToken) {
     return (
       <main style={{ maxWidth: 460, margin: '80px auto', padding: 16 }}>
@@ -317,6 +391,7 @@ export default function AdminPage() {
         </select>
         <button onClick={startNewBusiness} style={{ padding: '8px 14px' }}>New Business</button>
         <button onClick={connectGoogleCalendar} style={{ padding: '8px 14px' }}>Connect Calendar</button>
+        <button onClick={disconnectGoogleCalendar} style={{ padding: '8px 14px' }}>Disconnect Calendar</button>
         <button onClick={() => { setAdminToken(''); setPassword(''); }} style={{ padding: '8px 14px' }}>Sign Out</button>
       </div>
 
@@ -454,6 +529,28 @@ export default function AdminPage() {
       ) : (
         <p>No owner accounts yet.</p>
       )}
+
+      <h3 style={{ marginTop: 16 }}>SQL Helper (Supabase Copy/Paste)</h3>
+      <p style={{ marginTop: 0, color: '#475569' }}>
+        Use this when you want to manually run SQL in Supabase. It includes business upsert, owner-to-business linking, and optional calendar disconnect.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, marginBottom: 8 }}>
+        <input value={form.businessId} disabled />
+        <input
+          value={sqlOwnerUsername}
+          onChange={(e) => setSqlOwnerUsername(e.target.value.toLowerCase())}
+          placeholder="owner username for link"
+        />
+        <button onClick={() => navigator.clipboard.writeText(sqlTemplate).then(() => setMessage('SQL copied to clipboard.')).catch(() => setMessage('Failed to copy SQL.'))}>
+          Copy SQL
+        </button>
+      </div>
+      <textarea
+        readOnly
+        value={sqlTemplate}
+        rows={24}
+        style={{ width: '100%', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 12, lineHeight: 1.35 }}
+      />
 
       {message ? <p>{message}</p> : null}
     </main>

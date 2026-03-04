@@ -22,6 +22,7 @@ export interface DataStore {
   deleteConversationHistory(businessId: string, sessionId: string): Promise<void>;
   getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null>;
   saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void>;
+  removeGoogleCalendarConnection(businessId: string): Promise<void>;
 }
 
 async function readJson<T>(filePath: string, fallback: T): Promise<T> {
@@ -115,6 +116,10 @@ class JsonDataStore implements DataStore {
   }
 
   async saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void> {
+    // Not implemented for JSON store
+  }
+
+  async removeGoogleCalendarConnection(_businessId: string): Promise<void> {
     // Not implemented for JSON store
   }
 }
@@ -453,6 +458,16 @@ class SupabaseDataStore implements DataStore {
         updated_at: now
       }, { onConflict: 'business_id' });
     
+    if (error) throw new Error(error.message);
+  }
+
+  async removeGoogleCalendarConnection(businessId: string): Promise<void> {
+    const businessDbId = await this.getBusinessDbId(businessId);
+    if (!businessDbId) return;
+    const { error } = await this.client
+      .from('google_calendar_connections')
+      .delete()
+      .eq('business_id', businessDbId);
     if (error) throw new Error(error.message);
   }
 }
