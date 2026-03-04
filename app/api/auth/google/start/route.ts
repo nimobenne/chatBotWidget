@@ -3,14 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleAuthUrl } from '@/lib/calendar';
 import { getStore } from '@/lib/store';
 import { requireOwner } from '@/lib/ownerAuth';
-
-function authed(req: NextRequest): boolean {
-  const pwd = process.env.ADMIN_PASSWORD || 'password';
-  const headerPwd = req.headers.get('x-admin-password');
-  const queryPwd = process.env.NODE_ENV === 'production' ? null : req.nextUrl.searchParams.get('password');
-  const provided = headerPwd || queryPwd;
-  return provided === pwd;
-}
+import { isAdminAuthed } from '@/lib/adminAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const authHeader = req.headers.get('authorization') || '';
     const hasBearer = authHeader.startsWith('Bearer ');
-    if (!hasBearer && !authed(req)) {
+    if (!hasBearer && !isAdminAuthed(req)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -47,7 +40,7 @@ export async function GET(req: NextRequest) {
     }
 
     const nonce = randomUUID();
-    const authUrl = getGoogleAuthUrl(businessId, nonce);
+    const authUrl = getGoogleAuthUrl(businessId, nonce, hasBearer ? 'owner' : 'admin');
     const mode = req.nextUrl.searchParams.get('mode') || '';
     const res = mode === 'url'
       ? NextResponse.json({ url: authUrl })

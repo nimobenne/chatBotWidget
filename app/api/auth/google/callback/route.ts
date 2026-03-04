@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/admin?error=missing_params', req.url));
     }
 
-    const [businessId, returnedNonce] = state.split(':');
+    const [businessId, returnedNonce, source] = state.split(':');
     if (!businessId || !returnedNonce) {
       return NextResponse.redirect(new URL('/admin?error=invalid_state', req.url));
     }
@@ -41,7 +41,8 @@ export async function GET(req: NextRequest) {
       scope: tokens.scope
     });
 
-    const res = NextResponse.redirect(new URL('/admin?success=calendar_connected', req.url));
+    const redirectPath = source === 'owner' ? '/owner?success=calendar_connected' : '/admin?success=calendar_connected';
+    const res = NextResponse.redirect(new URL(redirectPath, req.url));
     res.cookies.set('google_oauth_state', '', { maxAge: 0, path: '/' });
     return res;
   } catch (err) {

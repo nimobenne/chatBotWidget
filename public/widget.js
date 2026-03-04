@@ -21,7 +21,8 @@
     name: 'Business',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     bookingMode: 'calendar',
-    services: defaultServices
+    services: defaultServices,
+    contactPhone: ''
   };
   let widgetToken = '';
 
@@ -68,7 +69,10 @@
   const shadow = root.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
-    .bubble { width:56px;height:56px;border-radius:999px;background:${accent};color:#fff;border:0;cursor:pointer;font-size:24px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+    .bubble { width:56px;height:56px;border-radius:999px;background:${accent};color:#fff;border:0;cursor:pointer;font-size:24px;box-shadow:0 10px 30px rgba(0,0,0,.2);position:relative;animation:pulse 1.8s ease-in-out infinite }
+    .nudge { position:fixed;background:#111;color:#fff;padding:7px 10px;border-radius:999px;font:600 12px/1.2 Arial,sans-serif;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.25);animation:floaty 1.8s ease-in-out infinite;z-index:2147483001 }
+    .nudge:after { content:'';position:absolute;right:-6px;top:50%;transform:translateY(-50%);border-left:7px solid #111;border-top:6px solid transparent;border-bottom:6px solid transparent }
+    .nudge.hidden { display:none }
     .panel { display:none; width:340px;height:520px;background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden;font-family:Arial,sans-serif;flex-direction:column }
     .panel.open { display:flex }
     .head { padding:12px 14px;background:${accent};color:#fff;font-weight:600;display:flex;justify-content:space-between;align-items:center }
@@ -91,6 +95,8 @@
     .send{padding:8px 12px;border:0;border-radius:8px;background:${accent};color:#fff;cursor:pointer}
     .send:disabled{opacity:.6;cursor:not-allowed}
     .loading{font-size:12px;color:#6b7280;text-align:center;padding:4px}
+    @keyframes pulse { 0% { transform: translateY(0) scale(1) } 50% { transform: translateY(-3px) scale(1.03) } 100% { transform: translateY(0) scale(1) } }
+    @keyframes floaty { 0% { transform: translateY(0) } 50% { transform: translateY(-2px) } 100% { transform: translateY(0) } }
   `;
 
   const bubble = document.createElement('button');
@@ -98,12 +104,23 @@
   bubble.textContent = icon;
   bubble.setAttribute('aria-label', 'Open chat');
 
+  const nudge = document.createElement('div');
+  nudge.className = 'nudge';
+  nudge.textContent = 'Book online now! ➜';
+  nudge.style.bottom = '34px';
+  if (position.includes('left')) {
+    nudge.style.left = '88px';
+  } else {
+    nudge.style.right = '88px';
+  }
+
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.innerHTML = '<div class="head"><span>Chat with us</span><button class="minimize" aria-label="Minimize">−</button></div><div class="progress"></div><div class="msgs"></div><div class="quick"></div><div class="composer"><input class="input" placeholder="Type a message..."/><button class="send">Send</button></div>';
 
   shadow.appendChild(style);
   shadow.appendChild(panel);
+  shadow.appendChild(nudge);
   shadow.appendChild(bubble);
 
   const msgs = panel.querySelector('.msgs');
@@ -122,7 +139,8 @@
           name: data.name || widgetConfig.name,
           timezone: data.timezone || widgetConfig.timezone,
           bookingMode: data.bookingMode || widgetConfig.bookingMode,
-          services: data.services
+          services: data.services,
+          contactPhone: data.contact?.phone || ''
         };
         widgetToken = data.widgetToken || '';
       }
@@ -386,7 +404,7 @@
 
   function startBooking() {
     if (widgetConfig.bookingMode === 'request') {
-      addMsg('Online booking is disabled for this business. Please switch to chat for assistance.', 'a');
+      addMsg(`Online booking is unavailable right now. Please call ${widgetConfig.contactPhone || 'the business'} for help booking.`, 'a');
       bookingButtons();
       return;
     }
@@ -438,7 +456,7 @@
       const data = await checkAvailability(booking.serviceName, dateISO);
       setLoading(false);
       if (data.error) {
-        addMsg(data.error, 'a');
+        addMsg(`${data.error} If this keeps happening, call ${widgetConfig.contactPhone || 'the business'} to book by phone.`, 'a');
         bookingButtons();
         return;
       }
@@ -460,7 +478,7 @@
         return;
       }
       if (!booking.slots.length) {
-        addMsg('No slots are open for that day. Want to try another date?', 'a');
+        addMsg(`No slots are open for that day. Try another date, or call ${widgetConfig.contactPhone || 'the business'} for help.`, 'a');
         bookingButtons();
         return;
       }
@@ -511,7 +529,7 @@
       setLoading(false);
       if (data.error) {
         emitEvent('booking_failed', { error: data.error });
-        addMsg(`Sorry, booking failed: ${data.error}`, 'a');
+        addMsg(`Sorry, booking failed: ${data.error}. Please call ${widgetConfig.contactPhone || 'the business'} and we can help by phone.`, 'a');
         bookingButtons();
         return;
       }
@@ -569,9 +587,13 @@
   bubble.onclick = () => {
     const open = panel.classList.contains('open');
     panel.classList.toggle('open', !open);
+    nudge.classList.toggle('hidden', !open);
     if (!open) input.focus();
   };
-  minimize.onclick = () => panel.classList.remove('open');
+  minimize.onclick = () => {
+    panel.classList.remove('open');
+    nudge.classList.remove('hidden');
+  };
   send.onclick = handleSend;
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') handleSend(); });
 })();

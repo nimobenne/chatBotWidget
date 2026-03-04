@@ -37,7 +37,7 @@ When customers want to book:
 3. Get their name and email (if they haven't given)
 4. Then book it
 
-If booking is disabled, say "Online booking is not available. Please call ${business.contact.phone} to book."
+If booking is disabled or booking fails after retries, say "Online booking is not available right now. Please call ${business.contact.phone} to book."
 
 Keep responses short and friendly.`;
 }
@@ -172,7 +172,7 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
             const fmt = new Date(dt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
             assistantText = `✅ Booked! ${args.customerName} - ${args.serviceName} on ${fmt}. Confirmation sent to ${args.customerEmail}`;
           } catch (err) {
-            assistantText = `Sorry, that time isn't available. Try another time.`;
+            assistantText = `Sorry, that time isn't available. Try another time, or call ${business.contact.phone} and we can book by phone.`;
           }
         }
       }

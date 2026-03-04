@@ -2,17 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
+import { isAdminAuthed } from '@/lib/adminAuth';
 
 const schema = z.object({ requestId: z.string().uuid() });
-
-function adminPassword(): string {
-  return process.env.ADMIN_PASSWORD || 'password';
-}
-
-function authed(req: NextRequest): boolean {
-  const provided = req.headers.get('x-admin-password');
-  return provided === adminPassword();
-}
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -23,7 +15,7 @@ function getSupabase() {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!authed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { requestId } = schema.parse(await req.json());
     const supabase = getSupabase();
 
@@ -57,7 +49,7 @@ export async function POST(req: NextRequest) {
       },
       services: draft.services || [],
       allowed_domains: Array.isArray(draft.allowedDomains) ? draft.allowedDomains : ['localhost', '127.0.0.1'],
-      booking_mode: draft.bookingMode || 'calendar',
+      booking_mode: 'calendar',
       policies: draft.policies || { cancellation: '', booking: '' },
       faqs: draft.faq || {},
       slot_interval_min: 30,

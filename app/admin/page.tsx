@@ -41,33 +41,43 @@ const defaultBusiness: BusinessConfig = {
 const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
 export default function AdminPage() {
-  const [password, setPassword] = useState('password');
+  const [password, setPassword] = useState('');
+  const [adminToken, setAdminToken] = useState('');
   const [businesses, setBusinesses] = useState<BusinessConfig[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [form, setForm] = useState<BusinessConfig>(defaultBusiness);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [intakeRequests, setIntakeRequests] = useState<any[]>([]);
+  const [owners, setOwners] = useState<any[]>([]);
+  const [ownerForm, setOwnerForm] = useState({ username: '', password: '', businessId: '' });
+  const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+
+  function adminHeaders(includeJson = false) {
+    return {
+      ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+      Authorization: `Bearer ${adminToken}`
+    };
+  }
+
+  async function loadAdminData() {
+    const data = await fetch('/api/businesses', { headers: adminHeaders() }).then((r) => r.json());
+    const list = (data.businesses || []) as BusinessConfig[];
+    setBusinesses(list);
+    const intake = await fetch('/api/admin/intake/requests', { headers: adminHeaders() }).then((r) => r.json());
+    setIntakeRequests(intake.requests || []);
+    const ownerRows = await fetch('/api/admin/owners', { headers: adminHeaders() }).then((r) => r.json());
+    setOwners(ownerRows.owners || []);
+    if (list.length && !selectedBusinessId) {
+      setSelectedBusinessId(list[0].businessId);
+      setForm(list[0]);
+    }
+  }
 
   useEffect(() => {
-    if (!password) return;
-    fetch('/api/businesses', { headers: { 'x-admin-password': password } })
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Failed to load businesses');
-        const list = (data.businesses || []) as BusinessConfig[];
-        setBusinesses(list);
-        fetch('/api/admin/intake/requests', { headers: { 'x-admin-password': password } })
-          .then((r) => r.json())
-          .then((d) => setIntakeRequests(d.requests || []))
-          .catch(() => null);
-        if (list.length && !selectedBusinessId) {
-          setSelectedBusinessId(list[0].businessId);
-          setForm(list[0]);
-        }
-      })
-      .catch((e) => setMessage(String(e.message || e)));
-  }, [password]);
+    if (!adminToken) return;
+    loadAdminData().catch((e) => setMessage(String(e.message || e)));
+  }, [adminToken]);
 
   const selectedBusiness = useMemo(
     () => businesses.find((b) => b.businessId === selectedBusinessId) || null,
@@ -75,7 +85,7 @@ export default function AdminPage() {
   );
 
   useEffect(() => {
-    if (selectedBusiness) setForm(selectedBusiness);
+    if (selectedBusiness) setForm({ ...selectedBusiness, bookingMode: 'calendar' });
   }, [selectedBusiness]);
 
   function updateField<K extends keyof BusinessConfig>(key: K, value: BusinessConfig[K]) {
@@ -86,20 +96,89 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/admin/intake/approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: adminHeaders(true),
         body: JSON.stringify({ requestId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to approve');
       setMessage(`Approved request for ${data.businessSlug}`);
-      const refreshed = await fetch('/api/businesses', {
-        headers: { 'x-admin-password': password }
-      }).then((r) => r.json());
-      setBusinesses(refreshed.businesses || []);
-      const reqs = await fetch('/api/admin/intake/requests', { headers: { 'x-admin-password': password } }).then((r) => r.json());
-      setIntakeRequests(reqs.requests || []);
+      await loadAdminData();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Error');
+    }
+  }
+
+  async function saveOwner() {
+    try {
+      const res = await fetch('/api/admin/owners', {
+        method: 'POST',
+        headers: adminHeaders(true),
+        body: JSON.stringify({
+          username: ownerForm.username,
+          password: ownerForm.password,
+          businessId: ownerForm.businessId.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save owner');
+      setMessage(`Owner ${data.owner.username} saved.`);
+      setOwnerForm((prev) => ({ ...prev, password: '' }));
+      await loadAdminData();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Error');
+    }
+  }
+
+  async function setOwnerActive(ownerId: string, action: 'activate' | 'deactivate') {
+    try {
+      const res = await fetch('/api/admin/owners', {
+        method: 'PATCH',
+        headers: adminHeaders(true),
+        body: JSON.stringify({ ownerId, action })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setMessage(`Owner ${action === 'activate' ? 'activated' : 'deactivated'}.`);
+      await loadAdminData();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Error');
+    }
+  }
+
+  async function resetOwnerPassword(ownerId: string) {
+    const nextPassword = (resetPasswords[ownerId] || '').trim();
+    if (nextPassword.length < 8) {
+      setMessage('New password must be at least 8 characters.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/owners', {
+        method: 'PATCH',
+        headers: adminHeaders(true),
+        body: JSON.stringify({ ownerId, action: 'reset_password', newPassword: nextPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setMessage('Owner password reset.');
+      setResetPasswords((prev) => ({ ...prev, [ownerId]: '' }));
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Error');
+    }
+  }
+
+  async function loginAdmin() {
+    setMessage('');
+    try {
+      const res = await fetch('/api/admin/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Login failed');
+      setAdminToken(data.token || '');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Login failed');
     }
   }
 
@@ -153,16 +232,13 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/businesses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        headers: adminHeaders(true),
         body: JSON.stringify(form)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       setMessage('Business saved.');
-      const refreshed = await fetch('/api/businesses', {
-        headers: { 'x-admin-password': password }
-      }).then((r) => r.json());
-      setBusinesses(refreshed.businesses || []);
+      await loadAdminData();
       setSelectedBusinessId(form.businessId);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Error');
@@ -173,20 +249,21 @@ export default function AdminPage() {
 
   function startNewBusiness() {
     setSelectedBusinessId('');
-    setForm({
-      ...defaultBusiness,
-      businessId: `biz_${Math.random().toString(36).slice(2, 8)}`,
-      name: 'New Business'
-    });
+      setForm({
+        ...defaultBusiness,
+        businessId: `biz_${Math.random().toString(36).slice(2, 8)}`,
+        name: 'New Business',
+        bookingMode: 'calendar'
+      });
   }
 
   function connectGoogleCalendar() {
-    if (!password || !form.businessId) {
-      setMessage('Set admin password and business id first.');
+    if (!adminToken || !form.businessId) {
+      setMessage('Sign in and select a business first.');
       return;
     }
     fetch(`/api/auth/google/start?businessId=${encodeURIComponent(form.businessId)}&mode=url`, {
-      headers: { 'x-admin-password': password }
+      headers: adminHeaders()
     })
       .then(async (r) => {
         const data = await r.json();
@@ -196,19 +273,32 @@ export default function AdminPage() {
       .catch((e) => setMessage(String(e.message || e)));
   }
 
+  if (!adminToken) {
+    return (
+      <main style={{ maxWidth: 460, margin: '80px auto', padding: 16 }}>
+        <h1>Admin Login</h1>
+        <p>Sign in to access business and owner controls.</p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="password"
+            placeholder="Admin password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ padding: 8, flex: 1 }}
+          />
+          <button onClick={loginAdmin} style={{ padding: '8px 14px' }}>Sign In</button>
+        </div>
+        {message ? <p>{message}</p> : null}
+      </main>
+    );
+  }
+
   return (
     <main style={{ maxWidth: 1100, margin: '24px auto', padding: 16 }}>
       <h1>Admin</h1>
-      <p>Default password is <code>password</code> (set ADMIN_PASSWORD in production).</p>
+      <p>Set admin password via <code>ADMIN_PASSWORD</code> in your environment.</p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input
-          type="password"
-          placeholder="Admin password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ padding: 8, minWidth: 260 }}
-        />
         <select
           value={selectedBusinessId}
           onChange={(e) => setSelectedBusinessId(e.target.value)}
@@ -223,6 +313,7 @@ export default function AdminPage() {
         </select>
         <button onClick={startNewBusiness} style={{ padding: '8px 14px' }}>New Business</button>
         <button onClick={connectGoogleCalendar} style={{ padding: '8px 14px' }}>Connect Calendar</button>
+        <button onClick={() => { setAdminToken(''); setPassword(''); }} style={{ padding: '8px 14px' }}>Sign Out</button>
       </div>
 
       <h3>Business Details</h3>
@@ -230,10 +321,7 @@ export default function AdminPage() {
         <input value={form.businessId} onChange={(e) => updateField('businessId', e.target.value)} placeholder="Business ID (e.g. demo_barber)" />
         <input value={form.name} onChange={(e) => updateField('name', e.target.value)} placeholder="Business Name" />
         <input value={form.timezone} onChange={(e) => updateField('timezone', e.target.value)} placeholder="Timezone" />
-        <select value={form.bookingMode} onChange={(e) => updateField('bookingMode', e.target.value as BusinessConfig['bookingMode'])}>
-          <option value="calendar">calendar (online booking)</option>
-          <option value="request">request (manual booking)</option>
-        </select>
+        <input value="calendar (online booking)" disabled />
         <input value={form.contact.phone || ''} onChange={(e) => updateField('contact', { ...form.contact, phone: e.target.value })} placeholder="Phone" />
         <input value={form.contact.email || ''} onChange={(e) => updateField('contact', { ...form.contact, email: e.target.value })} placeholder="Email" />
         <input value={form.contact.address || ''} onChange={(e) => updateField('contact', { ...form.contact, address: e.target.value })} placeholder="Address" />
@@ -319,6 +407,44 @@ export default function AdminPage() {
       <pre style={{ background: '#0f172a', color: '#e2e8f0', padding: 12, borderRadius: 8, minHeight: 160 }}>
         {JSON.stringify(form, null, 2)}
       </pre>
+
+      <h3 style={{ marginTop: 16 }}>Owner Accounts</h3>
+      <p style={{ marginTop: 0, color: '#475569' }}>Create username/password credentials and optionally assign a business.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 2fr auto', gap: 8, marginBottom: 10 }}>
+        <input value={ownerForm.username} onChange={(e) => setOwnerForm({ ...ownerForm, username: e.target.value })} placeholder="owner username" />
+        <input type="password" value={ownerForm.password} onChange={(e) => setOwnerForm({ ...ownerForm, password: e.target.value })} placeholder="temporary password" />
+        <input value={ownerForm.businessId} onChange={(e) => setOwnerForm({ ...ownerForm, businessId: e.target.value })} placeholder="optional business id" />
+        <button onClick={saveOwner}>Save Owner</button>
+      </div>
+      {owners.length ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {owners.map((owner) => (
+            <div key={owner.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div><strong>{owner.username}</strong> {owner.isActive ? '' : '(deactivated)'}</div>
+              <div style={{ fontSize: 13, color: '#475569' }}>
+                Assigned: {(owner.businesses || []).length ? owner.businesses.map((b: any) => b.businessId).join(', ') : 'none'}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                <input
+                  type="password"
+                  placeholder="new password"
+                  value={resetPasswords[owner.id] || ''}
+                  onChange={(e) => setResetPasswords((prev) => ({ ...prev, [owner.id]: e.target.value }))}
+                  style={{ minWidth: 180 }}
+                />
+                <button onClick={() => resetOwnerPassword(owner.id)}>Reset Password</button>
+                {owner.isActive ? (
+                  <button onClick={() => setOwnerActive(owner.id, 'deactivate')}>Deactivate</button>
+                ) : (
+                  <button onClick={() => setOwnerActive(owner.id, 'activate')}>Activate</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>No owner accounts yet.</p>
+      )}
 
       {message ? <p>{message}</p> : null}
     </main>

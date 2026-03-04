@@ -123,7 +123,7 @@ ${booking.notes ? `Notes: ${booking.notes}` : ''}
   }
 }
 
-export function getGoogleAuthUrl(businessId: string, state: string): string {
+export function getGoogleAuthUrl(businessId: string, state: string, source: 'admin' | 'owner' = 'admin'): string {
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
@@ -138,7 +138,7 @@ export function getGoogleAuthUrl(businessId: string, state: string): string {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    state: `${businessId}:${state}`,
+    state: `${businessId}:${state}:${source}`,
     prompt: 'consent'
   });
 }

@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-
-function adminPassword(): string {
-  return process.env.ADMIN_PASSWORD || 'password';
-}
-
-function authed(req: NextRequest): boolean {
-  const provided = req.headers.get('x-admin-password');
-  return provided === adminPassword();
-}
+import { isAdminAuthed } from '@/lib/adminAuth';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,7 +11,7 @@ function getSupabase() {
 
 export async function GET(req: NextRequest) {
   try {
-    if (!authed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('business_intake_requests')

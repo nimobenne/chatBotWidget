@@ -18,7 +18,7 @@ const businessSchema = z.object({
     email: z.string().optional(),
     address: z.string().optional()
   }),
-  bookingMode: z.enum(['request', 'calendar']),
+  bookingMode: z.literal('calendar').default('calendar'),
   services: z.array(serviceSchema).min(1)
 });
 
@@ -45,7 +45,8 @@ export async function GET(req: NextRequest) {
     const { data: ownerships, error: ownErr } = await supabase
       .from('business_owners')
       .select('business_id')
-      .eq('owner_user_id', user.id);
+      .eq('owner_user_id', user.id)
+      .order('created_at', { ascending: false });
 
     if (ownErr) {
       return NextResponse.json({
@@ -64,10 +65,12 @@ export async function GET(req: NextRequest) {
 
     if (!ids.length) return NextResponse.json({ businesses: [], intakeRequests: requests || [] });
 
+    const assignedBusinessId = ids[0];
+
     const { data: businesses, error: bizErr } = await supabase
       .from('businesses')
       .select('*')
-      .in('id', ids)
+      .eq('id', assignedBusinessId)
       .order('updated_at', { ascending: false });
 
     if (bizErr) return NextResponse.json({ error: bizErr.message }, { status: 400 });

@@ -1,24 +1,21 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
 
 type OwnerBusiness = {
   businessId: string;
   name: string;
   timezone: string;
-  bookingMode: 'request' | 'calendar';
+  bookingMode: 'calendar';
   contact: { phone: string; email?: string; address?: string };
   services: { name: string; durationMin: number; priceRange?: string }[];
 };
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+const TOKEN_KEY = 'owner_portal_token';
 
 export default function OwnerPage() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [msg, setMsg] = useState('');
   const [token, setToken] = useState('');
   const [businesses, setBusinesses] = useState<OwnerBusiness[]>([]);
@@ -31,7 +28,6 @@ export default function OwnerPage() {
     timezone: 'America/New_York',
     phone: '',
     email: '',
-    bookingMode: 'calendar' as 'request' | 'calendar',
     servicesText: 'Classic Haircut:30, Skin Fade:45'
   });
 
@@ -40,37 +36,38 @@ export default function OwnerPage() {
     [businesses, selectedBusinessId]
   );
 
-  async function loadSession() {
-    const { data } = await supabase.auth.getSession();
-    const t = data.session?.access_token || '';
-    setToken(t);
-    if (t) {
-      await loadBusinesses(t);
-    }
-  }
-
   useEffect(() => {
-    loadSession();
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      const t = session?.access_token || '';
-      setToken(t);
-      if (t) loadBusinesses(t);
-    });
-    return () => data.subscription.unsubscribe();
+    const savedToken = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) || '' : '';
+    if (savedToken) {
+      setToken(savedToken);
+      loadBusinesses(savedToken);
+    }
   }, []);
 
-  async function sendMagicLink() {
+  async function login() {
     setMsg('');
-    const redirectTo = typeof window !== 'undefined'
-      ? `${window.location.origin}/owner`
-      : 'https://chat-bot-widget-two.vercel.app/owner';
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo }
+    const res = await fetch('/api/owner/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
     });
-    if (error) setMsg(error.message);
-    else setMsg('Magic link sent. Check your email.');
+    const data = await res.json();
+    if (!res.ok) {
+      setMsg(data.error || 'Login failed');
+      return;
+    }
+    const nextToken = data.token || '';
+    setToken(nextToken);
+    localStorage.setItem(TOKEN_KEY, nextToken);
+    await loadBusinesses(nextToken);
+  }
+
+  function logout() {
+    setToken('');
+    setBusinesses([]);
+    setSelectedBusinessId('');
+    setDashboard(null);
+    localStorage.removeItem(TOKEN_KEY);
   }
 
   async function loadBusinesses(authToken: string) {
@@ -79,14 +76,16 @@ export default function OwnerPage() {
     });
     const data = await res.json();
     if (!res.ok) {
+      if (res.status === 401) logout();
       setMsg(data.error || 'Failed to load businesses');
       return;
     }
     setBusinesses(data.businesses || []);
     setIntakeRequests(data.intakeRequests || []);
-    if (!selectedBusinessId && data.businesses?.length) {
-      setSelectedBusinessId(data.businesses[0].businessId);
-      loadDashboard(authToken, data.businesses[0].businessId);
+    if (data.businesses?.length) {
+      const first = data.businesses[0].businessId;
+      setSelectedBusinessId(first);
+      loadDashboard(authToken, first);
     }
   }
 
@@ -102,7 +101,7 @@ export default function OwnerPage() {
     setDashboard(data);
   }
 
-  async function createBusiness() {
+  async function submitIntakeRequest() {
     setMsg('');
     if (!token) return;
     const services = newBiz.servicesText
@@ -125,7 +124,7 @@ export default function OwnerPage() {
         name: newBiz.name,
         timezone: newBiz.timezone,
         contact: { phone: newBiz.phone, email: newBiz.email },
-        bookingMode: newBiz.bookingMode,
+        bookingMode: 'calendar',
         services
       })
     });
@@ -153,17 +152,24 @@ export default function OwnerPage() {
 
   if (!token) {
     return (
-      <main style={{ maxWidth: 620, margin: '40px auto', padding: 20 }}>
+      <main style={{ maxWidth: 520, margin: '50px auto', padding: 20 }}>
         <h1>Owner Portal</h1>
-        <p>Sign in with a magic link to manage your business widget.</p>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <p>Use your admin-provided username and password.</p>
+        <div style={{ display: 'grid', gap: 8 }}>
           <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="owner@business.com"
-            style={{ flex: 1, padding: 8 }}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            style={{ padding: 8 }}
           />
-          <button onClick={sendMagicLink} style={{ padding: '8px 14px' }}>Send Magic Link</button>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            style={{ padding: 8 }}
+          />
+          <button onClick={login} style={{ padding: '8px 14px' }}>Sign In</button>
         </div>
         {msg ? <p>{msg}</p> : null}
       </main>
@@ -173,24 +179,23 @@ export default function OwnerPage() {
   return (
     <main style={{ maxWidth: 1040, margin: '30px auto', padding: 20 }}>
       <h1>Owner Dashboard</h1>
-      <p>Manage businesses, connect calendar, and track bookings.</p>
+      <p>Submit onboarding info, connect calendar, and track bookings.</p>
+      <div style={{ marginBottom: 12 }}>
+        <button onClick={logout} style={{ padding: '8px 14px' }}>Sign Out</button>
+      </div>
 
       <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <h3>Create Business</h3>
+        <h3>Submit New Business Intake</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
           <input placeholder="business id" value={newBiz.businessId} onChange={(e) => setNewBiz({ ...newBiz, businessId: e.target.value })} />
           <input placeholder="business name" value={newBiz.name} onChange={(e) => setNewBiz({ ...newBiz, name: e.target.value })} />
           <input placeholder="timezone" value={newBiz.timezone} onChange={(e) => setNewBiz({ ...newBiz, timezone: e.target.value })} />
           <input placeholder="phone" value={newBiz.phone} onChange={(e) => setNewBiz({ ...newBiz, phone: e.target.value })} />
           <input placeholder="email" value={newBiz.email} onChange={(e) => setNewBiz({ ...newBiz, email: e.target.value })} />
-          <select value={newBiz.bookingMode} onChange={(e) => setNewBiz({ ...newBiz, bookingMode: e.target.value as 'request' | 'calendar' })}>
-            <option value="calendar">calendar</option>
-            <option value="request">request</option>
-          </select>
+          <input value="calendar (online booking)" disabled />
           <input style={{ gridColumn: '1 / -1' }} placeholder="services format: Name:Minutes, Name:Minutes" value={newBiz.servicesText} onChange={(e) => setNewBiz({ ...newBiz, servicesText: e.target.value })} />
         </div>
-        <button onClick={createBusiness} style={{ marginTop: 10, padding: '8px 14px' }}>Create / Save</button>
-        <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>New businesses are submitted for admin approval before going live.</p>
+        <button onClick={submitIntakeRequest} style={{ marginTop: 10, padding: '8px 14px' }}>Submit Intake</button>
       </section>
 
       <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
@@ -207,7 +212,7 @@ export default function OwnerPage() {
       </section>
 
       <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <h3>Your Businesses</h3>
+        <h3>Assigned Business</h3>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
           <select value={selectedBusinessId} onChange={(e) => {
             setSelectedBusinessId(e.target.value);
@@ -242,23 +247,6 @@ export default function OwnerPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
               <Stat title="Calendar Synced" value={dashboard.metrics.calendarSynced30d} />
               <Stat title="Top Service" value={dashboard.topServices?.[0]?.service || 'n/a'} />
-            </div>
-
-            <h4>Top Services</h4>
-            <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
-              {(dashboard.topServices || []).map((s: any) => (
-                <div key={s.service} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-                  <strong>{s.service}</strong> - {s.count} bookings
-                </div>
-              ))}
-            </div>
-            <h4>Recent Bookings</h4>
-            <div style={{ display: 'grid', gap: 6 }}>
-              {(dashboard.recentBookings || []).slice(0, 12).map((b: any) => (
-                <div key={b.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-                  <strong>{b.service}</strong> - {new Date(b.start_time).toLocaleString()} - {b.customer_name} ({b.customer_email})
-                </div>
-              ))}
             </div>
           </>
         ) : (
