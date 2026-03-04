@@ -6,7 +6,7 @@
   const position = script.getAttribute('data-position') || 'bottom-right';
   const accent = script.getAttribute('data-accent') || '#111827';
   const icon = script.getAttribute('data-icon') || '💬';
-  const greeting = script.getAttribute('data-greeting') || 'Hi! I can help with services, hours, and booking.';
+  const greeting = script.getAttribute('data-greeting') || 'Hi! How can I help you today?';
   const apiBase = new URL(script.src, window.location.href).origin;
   const sessionKey = `ai_receptionist_session_${businessId}`;
   const sessionId = localStorage.getItem(sessionKey) || crypto.randomUUID();
@@ -41,14 +41,8 @@
     .spinner{display:inline-block;width:12px;height:12px;border:2px solid #e5e7eb;border-top-color:${accent};border-radius:50%;animation:spin .8s linear infinite;margin-right:4px;vertical-align:middle}
     @keyframes spin{to{transform:rotate(360deg)}}
     .quick-options { display:flex;flex-wrap:wrap;gap:6px;padding:10px;background:#fff;border-bottom:1px solid #e5e7eb }
-    .quick-btn { padding:8px 12px;border:1px solid ${accent};background:${accent};color:#fff;border-radius:20px;font-size:13px;cursor:pointer }
-    .quick-btn.secondary { background:#fff;color:${accent} }
+    .quick-btn { padding:8px 14px;border:1px solid ${accent};background:${accent};color:#fff;border-radius:20px;font-size:13px;cursor:pointer }
     .quick-btn:hover { opacity:0.9 }
-    .form-group { padding:10px }
-    .form-group label { display:block;font-size:13px;margin-bottom:4px;color:#374151 }
-    .form-group input { width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box }
-    .form-group button { width:100%;padding:10px;background:${accent};color:#fff;border:0;border-radius:6px;cursor:pointer;margin-top:8px }
-    .success-check { font-size:40px;text-align:center;padding:20px }
   `;
 
   const bubble = document.createElement('button');
@@ -59,10 +53,10 @@
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.innerHTML = `
-    <div class="head"><span>Chat with us</span><button class="minimize" aria-label="Minimize chat">−</button></div>
+    <div class="head"><span>Chat with us</span><button class="minimize" aria-label="Minimize">−</button></div>
     <div class="msgs"></div>
     <div class="quick-options"></div>
-    <div class="composer"><input class="input" placeholder="Type a message..." aria-label="Message input"/><button class="send" aria-label="Send message">Send</button></div>
+    <div class="composer"><input class="input" placeholder="Type a message..."/><button class="send">Send</button></div>
   `;
 
   shadow.appendChild(style);
@@ -75,33 +69,6 @@
   const minimize = panel.querySelector('.minimize');
   const quickOptions = panel.querySelector('.quick-options');
 
-  let currentStep = 'start';
-
-  function showQuickOptions(options) {
-    quickOptions.innerHTML = '';
-    options.forEach(opt => {
-      const btn = document.createElement('button');
-      btn.className = 'quick-btn' + (opt.secondary ? ' secondary' : '');
-      btn.textContent = opt.label;
-      btn.onclick = () => {
-        quickOptions.innerHTML = '';
-        sendMessage(opt.action);
-      };
-      quickOptions.appendChild(btn);
-    });
-  }
-
-  function showQuickReply(label, action) {
-    const btn = document.createElement('button');
-    btn.className = 'quick-btn';
-    btn.textContent = label;
-    btn.onclick = () => {
-      btn.remove();
-      sendMessage(action);
-    };
-    quickOptions.appendChild(btn);
-  }
-
   const mainOptions = [
     { label: '📅 Book Appointment', action: 'I want to book an appointment' },
     { label: '🕐 Hours', action: 'What are your hours?' },
@@ -111,122 +78,80 @@
 
   function addMsg(text, who) {
     const row = document.createElement('div');
-    row.className = `row ${who}`;
-    const msg = document.createElement('div');
-    msg.className = 'msg';
-    msg.textContent = text;
-    row.appendChild(msg);
+    row.className = 'row ' + who;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'msg';
+    msgDiv.textContent = text;
+    row.appendChild(msgDiv);
     msgs.appendChild(row);
     msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function showQuickOptions(options) {
+    quickOptions.innerHTML = '';
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'quick-btn';
+      btn.textContent = opt.label;
+      btn.onclick = () => sendMessage(opt.action);
+      quickOptions.appendChild(btn);
+    });
   }
 
   addMsg(greeting, 'a');
   showQuickOptions(mainOptions);
 
-  bubble.onclick = () => {
-    const open = panel.classList.contains('open');
-    panel.classList.toggle('open', !open);
-    if (!open) input.focus();
-  };
-
-  minimize.onclick = () => {
-    panel.classList.remove('open');
-  };
+  bubble.onclick = () => panel.classList.toggle('open', !panel.classList.contains('open'));
+  minimize.onclick = () => panel.classList.remove('open');
 
   function setLoading(isLoading) {
     send.disabled = isLoading;
     if (isLoading) {
       const loading = document.createElement('div');
       loading.className = 'loading';
-      loading.id = 'loading-indicator';
       loading.innerHTML = '<span class="spinner"></span>Typing...';
       msgs.appendChild(loading);
       msgs.scrollTop = msgs.scrollHeight;
     } else {
-      const loading = msgs.querySelector('#loading-indicator');
+      const loading = msgs.querySelector('.loading');
       if (loading) loading.remove();
     }
   }
 
-  async function sendMessage(message) {
-    if (!message || (typeof message === 'string' && !message.trim())) return;
-    const text = typeof message === 'string' ? message : input.value.trim();
-    if (!text) return;
+  async function sendMessage(text) {
+    if (!text || !text.trim()) return;
     
+    const message = text.trim();
     input.value = '';
-    addMsg(text, 'u');
+    addMsg(message, 'u');
     setLoading(true);
     
     try {
       const res = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId, sessionId, message: text })
+        body: JSON.stringify({ businessId, sessionId, message })
       });
+      
       const data = await res.json();
       setLoading(false);
       
       if (data.error) {
         addMsg(data.error, 'a');
-        showQuickOptions(mainOptions);
       } else {
-        const response = data.message || '';
-        addMsg(response, 'a');
-        
-        // Show context-aware quick replies
-        quickOptions.innerHTML = '';
-        
-        if (response.toLowerCase().includes('what service')) {
-          showQuickReply('Classic Haircut', 'Classic Haircut');
-          showQuickReply('Skin Fade', 'Skin Fade');
-          showQuickReply('Beard Trim', 'Beard Trim');
-        } else if (response.toLowerCase().includes('what date') || response.toLowerCase().includes('what time')) {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowStr = tomorrow.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-          showQuickReply(tomorrowStr + ' 4pm', 'Tomorrow at 4pm');
-          showQuickReply(tomorrowStr + ' 5pm', 'Tomorrow at 5pm');
-          showQuickReply('Pick my own time', 'Let me pick a time');
-        } else         if (response.toLowerCase().includes('name and email') || response.toLowerCase().includes('confirm')) {
-          const inputArea = document.createElement('div');
-          inputArea.className = 'form-group';
-          inputArea.style.padding = '10px';
-          inputArea.innerHTML = `
-            <input class="name-input" placeholder="Your name" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:8px;box-sizing:border-box"/>
-            <input class="email-input" placeholder="Your email" type="email" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:8px;box-sizing:border-box"/>
-            <button class="confirm-btn" style="width:100%;padding:10px;background:${accent};color:#fff;border:0;border-radius:6px;cursor:pointer">Confirm Booking</button>
-            <p style="font-size:12px;color:#6b7280;margin:8px 0 0;text-align:center">Or type your name and email below</p>
-          `;
-          quickOptions.appendChild(inputArea);
-          
-          const nameInput = inputArea.querySelector('.name-input');
-          const emailInput = inputArea.querySelector('.email-input');
-          const confirmBtn = inputArea.querySelector('.confirm-btn');
-          
-          confirmBtn.onclick = (e) => {
-            e.stopPropagation();
-            const name = nameInput.value.trim();
-            const email = emailInput.value.trim();
-            if (name && email) {
-              sendMessage(`My name is ${name} and my email is ${email}`);
-            } else {
-              alert('Please enter both name and email');
-            }
-          };
-        } else if (response.includes('✅') || response.toLowerCase().includes('confirmed')) {
-          showQuickReply('Book another', 'I want to book another appointment');
-          showQuickReply('Done', 'Thank you');
-        } else {
-          showQuickOptions(mainOptions);
-        }
+        addMsg(data.message || 'OK', 'a');
       }
-    } catch {
+      
+      // Show main options after each response
+      setTimeout(() => showQuickOptions(mainOptions), 100);
+      
+    } catch (e) {
       setLoading(false);
-      addMsg('Network error. Please try again.', 'a');
+      addMsg('Error. Try again.', 'a');
       showQuickOptions(mainOptions);
     }
   }
 
-  send.addEventListener('click', () => sendMessage());
-  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') sendMessage(); });
+  send.onclick = () => sendMessage(input.value);
+  input.onkeydown = (e) => { if (e.key === 'Enter') sendMessage(input.value); };
 })();
