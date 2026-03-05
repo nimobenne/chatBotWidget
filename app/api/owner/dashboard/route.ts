@@ -64,8 +64,25 @@ export async function GET(req: NextRequest) {
       if (row) row.conversations += 1;
     }
 
+    const { data: billing } = await supabase
+      .from('business_billing')
+      .select('billing_status, trial_booking_threshold, go_live_enabled, test_mode_enabled')
+      .eq('business_id', business.id)
+      .single();
+
     return NextResponse.json({
       business: { slug: business.slug, name: business.name },
+      billing: {
+        status: billing?.billing_status || 'trial_unpaid',
+        threshold: billing?.trial_booking_threshold || 5,
+        goLiveEnabled: !!billing?.go_live_enabled,
+        testModeEnabled: !!billing?.test_mode_enabled,
+        warning: billing?.billing_status === 'overdue'
+          ? 'Billing is overdue. Online booking may be paused.'
+          : billing?.billing_status === 'cancelled'
+            ? 'Billing is cancelled. Access may be restricted.'
+            : null
+      },
       metrics: {
         bookings30d: bookings?.length || 0,
         confirmed30d: confirmed,

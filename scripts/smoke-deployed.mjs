@@ -80,6 +80,27 @@ async function run() {
   });
   logStep('Create business', createBusiness);
 
+  const enableTestMode = await api('/api/admin/billing', {
+    method: 'PATCH',
+    headers: adminHeaders,
+    body: JSON.stringify({ businessId, action: 'toggle_test_mode', testModeEnabled: true })
+  });
+  logStep('Enable billing test mode', enableTestMode);
+
+  const runChecklistTest = await api('/api/admin/billing', {
+    method: 'PATCH',
+    headers: adminHeaders,
+    body: JSON.stringify({ businessId, action: 'run_test_booking_check' })
+  });
+  logStep('Run booking checklist test', runChecklistTest);
+
+  const enableGoLive = await api('/api/admin/billing', {
+    method: 'PATCH',
+    headers: adminHeaders,
+    body: JSON.stringify({ businessId, action: 'set_go_live', goLiveEnabled: true })
+  });
+  logStep('Enable go live', enableGoLive);
+
   const getAfterCreate = await api('/api/businesses', { headers: { Authorization: `Bearer ${adminToken}` } });
   logStep('List businesses (after create)', getAfterCreate);
 

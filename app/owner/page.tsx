@@ -215,6 +215,11 @@ export default function OwnerPage() {
         <h3>Analytics (last 30 days)</h3>
         {dashboard ? (
           <>
+            {dashboard.billing?.warning ? (
+              <div style={{ marginBottom: 10, padding: 8, borderRadius: 8, background: '#7f1d1d', color: '#fee2e2' }}>
+                {dashboard.billing.warning}
+              </div>
+            ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
               <Stat title="Bookings" value={dashboard.metrics.bookings30d} />
               <Stat title="Confirmed" value={dashboard.metrics.confirmed30d} />

@@ -2,6 +2,8 @@ import { getStore } from './store';
 import { BookingRecord, BusinessConfig, Service } from './types';
 import { createCalendarEvent } from './calendar';
 import { getCalendarBusyRanges } from './calendar';
+import { sendAlertEmail } from './alerts';
+import { getBookingBlockReason } from './billing';
 
 function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   const dtf = new Intl.DateTimeFormat('en-US', {
@@ -112,6 +114,8 @@ export async function createBookingRecord(params: {
   notes?: string;
 }) {
   const store = getStore();
+  const blockReason = await getBookingBlockReason(params.business.businessId);
+  if (blockReason) throw new Error(blockReason);
   const service = findService(params.business, params.serviceName);
   const start = new Date(params.startTimeISO);
   const end = new Date(start);
@@ -166,6 +170,12 @@ export async function createBookingRecord(params: {
     } catch (error) {
       await store.deleteBooking(booking.bookingId).catch(() => null);
       console.error('Failed to create calendar event:', error);
+      await sendAlertEmail({
+        severity: 'error',
+        title: 'Calendar event creation failed',
+        message: error instanceof Error ? error.message : 'Unknown calendar error',
+        context: { businessId: params.business.businessId, bookingId: booking.bookingId, serviceName: params.serviceName }
+      });
       throw new Error('Unable to confirm booking in calendar. Please try again or call the business.');
     }
   }

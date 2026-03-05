@@ -35,7 +35,7 @@ const defaultBusiness: BusinessConfig = {
   styling: { accentColor: '#22c55e' }
 };
 
-type TabKey = 'businesses' | 'owners' | 'sql';
+type TabKey = 'businesses' | 'owners' | 'billing' | 'sql' | 'help';
 type BusinessHealth = {
   businessId: string;
   servicesConfigured: boolean;
@@ -58,6 +58,7 @@ export default function AdminPage() {
   const [businessHealth, setBusinessHealth] = useState<Record<string, BusinessHealth>>({});
   const [owners, setOwners] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [billingClients, setBillingClients] = useState<any[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formStep, setFormStep] = useState(0);
@@ -129,6 +130,9 @@ export default function AdminPage() {
 
     const auditRows = await requestJson('/api/admin/audit', { headers: adminHeaders() });
     setAuditLogs(auditRows.logs || []);
+
+    const billingRows = await requestJson('/api/admin/billing/overview', { headers: adminHeaders() });
+    setBillingClients(billingRows.clients || []);
   }
 
   useEffect(() => {
@@ -433,6 +437,22 @@ export default function AdminPage() {
     }
   }
 
+  async function updateBilling(businessId: string, action: string, extra: Record<string, unknown> = {}) {
+    try {
+      const res = await fetch('/api/admin/billing', {
+        method: 'PATCH',
+        headers: adminHeaders(true),
+        body: JSON.stringify({ businessId, action, ...extra })
+      });
+      const data = await readJsonSafe(res);
+      if (!res.ok) throw new Error(friendlyError(data));
+      setMessage(`Billing updated for ${businessId}.`);
+      await loadAdminData();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Billing update failed');
+    }
+  }
+
   if (!adminToken) {
     return (
       <main style={{ maxWidth: 460, margin: '90px auto', padding: 20 }}>
@@ -455,7 +475,9 @@ export default function AdminPage() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         <button onClick={() => setActiveTab('businesses')} style={{ background: activeTab === 'businesses' ? '#16a34a' : '#1e293b' }}>Businesses</button>
         <button onClick={() => setActiveTab('owners')} style={{ background: activeTab === 'owners' ? '#16a34a' : '#1e293b' }}>Owners</button>
+        <button onClick={() => setActiveTab('billing')} style={{ background: activeTab === 'billing' ? '#16a34a' : '#1e293b' }}>Billing</button>
         <button onClick={() => setActiveTab('sql')} style={{ background: activeTab === 'sql' ? '#16a34a' : '#1e293b' }}>SQL Tools</button>
+        <button onClick={() => setActiveTab('help')} style={{ background: activeTab === 'help' ? '#16a34a' : '#1e293b' }}>Help</button>
         <button style={{ marginLeft: 'auto' }} onClick={() => { setAdminToken(''); setPassword(''); }}>Sign Out</button>
       </div>
 
@@ -541,6 +563,72 @@ export default function AdminPage() {
         </section>
       )}
 
+      {activeTab === 'billing' && (
+        <section>
+          <h3>Billing and Client Status</h3>
+          <p>Track trial progress, payment state, and go-live readiness.</p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {billingClients.map((c) => (
+              <div key={c.businessId} style={{ border: '1px solid #334155', borderRadius: 10, padding: 10, background: '#111827' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <div>
+                    <strong>{c.businessName}</strong> <span style={{ color: '#94a3b8' }}>({c.businessId})</span>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>Owner: {c.ownerUsername || 'unassigned'} · Confirmed bookings: {c.thresholdProgress}</div>
+                  </div>
+                  <div style={{ fontSize: 12 }}>
+                    <span style={{ padding: '2px 8px', borderRadius: 999, background: c.readyToInvoice ? '#854d0e' : '#1e293b' }}>Status: {c.billing.billing_status}</span>
+                    <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: c.goLiveEligible ? '#14532d' : '#7f1d1d' }}>Go-live {c.billing.go_live_enabled ? 'ON' : 'OFF'}</span>
+                    <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: c.billing.test_mode_enabled ? '#075985' : '#1e293b' }}>Test Mode {c.billing.test_mode_enabled ? 'ON' : 'OFF'}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr .7fr .7fr 2fr', gap: 8, marginTop: 8 }}>
+                  <input
+                    defaultValue={c.billing.paypal_email || ''}
+                    placeholder="paypal email"
+                    onBlur={(e) => updateBilling(c.businessId, 'update_fields', { fields: { paypal_email: e.target.value } })}
+                  />
+                  <input
+                    defaultValue={c.billing.paypal_subscription_id || ''}
+                    placeholder="paypal subscription id"
+                    onBlur={(e) => updateBilling(c.businessId, 'update_fields', { fields: { paypal_subscription_id: e.target.value } })}
+                  />
+                  <input
+                    defaultValue={String(c.billing.setup_fee_eur ?? 99)}
+                    placeholder="setup fee"
+                    onBlur={(e) => updateBilling(c.businessId, 'update_fields', { fields: { setup_fee_eur: Number(e.target.value || 99) } })}
+                  />
+                  <input
+                    defaultValue={String(c.billing.trial_booking_threshold ?? 5)}
+                    placeholder="threshold"
+                    onBlur={(e) => updateBilling(c.businessId, 'update_fields', { fields: { trial_booking_threshold: Number(e.target.value || 5) } })}
+                  />
+                  <input
+                    defaultValue={c.billing.notes || ''}
+                    placeholder="notes"
+                    onBlur={(e) => updateBilling(c.businessId, 'update_fields', { fields: { notes: e.target.value } })}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  <button onClick={() => updateBilling(c.businessId, 'set_pending_payment')}>Set Pending</button>
+                  <button onClick={() => updateBilling(c.businessId, 'mark_paid')}>Mark Paid</button>
+                  <button onClick={() => updateBilling(c.businessId, 'set_overdue')}>Set Overdue</button>
+                  <button onClick={() => updateBilling(c.businessId, 'cancel')}>Cancel</button>
+                  <button onClick={() => updateBilling(c.businessId, 'reactivate')}>Reactivate</button>
+                  <button onClick={() => updateBilling(c.businessId, 'run_test_booking_check')}>Run Test Booking Check</button>
+                  <button onClick={() => updateBilling(c.businessId, 'set_go_live', { goLiveEnabled: !c.billing.go_live_enabled })}>{c.billing.go_live_enabled ? 'Disable Go Live' : 'Enable Go Live'}</button>
+                  <button onClick={() => updateBilling(c.businessId, 'toggle_test_mode', { testModeEnabled: !c.billing.test_mode_enabled })}>{c.billing.test_mode_enabled ? 'Disable Test Mode' : 'Enable Test Mode'}</button>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 12, color: '#94a3b8' }}>
+                  Checklist: profile {String(c.checklist.profileConfigured)} · owner {String(c.checklist.ownerAssigned)} · calendar {String(c.checklist.calendarUsable)} · test booking {String(c.checklist.testBookingPassed)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {activeTab === 'sql' && (
         <section>
           <h3>SQL Tools</h3>
@@ -601,6 +689,20 @@ export default function AdminPage() {
             />
             <button onClick={deleteSessionData}>Delete Session Data</button>
           </div>
+        </section>
+      )}
+
+      {activeTab === 'help' && (
+        <section>
+          <h3>Help and Runbooks</h3>
+          <p>Use these guides when something breaks:</p>
+          <ul>
+            <li><a href="/help">Open Help Center</a></li>
+            <li>Calendar not connecting</li>
+            <li>Booking failed</li>
+            <li>Owner locked out</li>
+            <li>Payment overdue</li>
+          </ul>
         </section>
       )}
 

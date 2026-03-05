@@ -7,6 +7,8 @@ import { sendBookingConfirmation } from '@/lib/email';
 import { getRequestContext, extractOriginHost } from '@/lib/observability';
 import { verifyWidgetToken } from '@/lib/widgetToken';
 import { getSupabaseServiceClient } from '@/lib/ownerCredentials';
+import { getBookingBlockReason } from '@/lib/billing';
+import { sendAlertEmail } from '@/lib/alerts';
 
 const schema = z.object({
   businessId: z.string().min(1),
@@ -125,6 +127,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
     }
 
+    const blockReason = await getBookingBlockReason(parsed.businessId);
+    if (blockReason) {
+      return NextResponse.json({ error: blockReason, code: 'BOOKING_BLOCKED_BY_BILLING' }, { status: 403 });
+    }
+
     const origin = req.headers.get('origin');
     const host = extractOriginHost(req);
     const isSameHost = host && host === req.nextUrl.hostname;
@@ -221,6 +228,12 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     ctx.log('error', 'Booking creation failed', { error: message });
+    await sendAlertEmail({
+      severity: 'error',
+      title: 'Booking creation failed',
+      message,
+      context: { route: '/api/booking/create' }
+    });
     return NextResponse.json({ error: message, code: 'BOOKING_REQUEST_INVALID' }, { status: 400 });
   }
 }

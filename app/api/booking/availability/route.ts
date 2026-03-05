@@ -4,6 +4,7 @@ import { getStore } from '@/lib/store';
 import { getAvailableSlots } from '@/lib/booking';
 import { getRequestContext, extractOriginHost } from '@/lib/observability';
 import { verifyWidgetToken } from '@/lib/widgetToken';
+import { getBookingBlockReason } from '@/lib/billing';
 
 const schema = z.object({
   businessId: z.string().min(1),
@@ -19,6 +20,11 @@ export async function POST(req: NextRequest) {
     const business = await store.getBusinessConfig(parsed.businessId);
     if (!business) {
       return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
+    }
+
+    const blockReason = await getBookingBlockReason(parsed.businessId);
+    if (blockReason) {
+      return NextResponse.json({ error: blockReason, code: 'BOOKING_BLOCKED_BY_BILLING' }, { status: 403 });
     }
 
     const origin = req.headers.get('origin');

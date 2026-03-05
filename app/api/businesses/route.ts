@@ -19,6 +19,15 @@ export async function POST(req: NextRequest) {
 
     try {
       await getStore().saveBusinessConfig({ ...business, bookingMode: 'calendar' });
+      try {
+        const supabase = getSupabaseServiceClient();
+        const { data: biz } = await supabase.from('businesses').select('id').eq('slug', business.businessId).single();
+        if (biz) {
+          await supabase.from('business_billing').upsert({ business_id: biz.id, updated_at: new Date().toISOString() }, { onConflict: 'business_id' });
+        }
+      } catch {
+        // non-fatal if billing table not ready
+      }
       await logAdminAudit(req, {
         action: 'business_upsert',
         targetType: 'business',
@@ -49,6 +58,10 @@ export async function POST(req: NextRequest) {
       };
       const { error } = await supabase.from('businesses').upsert(sbRecord, { onConflict: 'slug' });
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      const { data: biz } = await supabase.from('businesses').select('id').eq('slug', business.businessId).single();
+      if (biz) {
+        await supabase.from('business_billing').upsert({ business_id: biz.id, updated_at: new Date().toISOString() }, { onConflict: 'business_id' });
+      }
       await logAdminAudit(req, {
         action: 'business_upsert',
         targetType: 'business',

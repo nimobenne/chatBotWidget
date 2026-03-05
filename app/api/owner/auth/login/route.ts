@@ -82,6 +82,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
     }
 
+    const { data: ownerLinks } = await supabase
+      .from('business_owners')
+      .select('business_id')
+      .eq('owner_user_id', owner.id)
+      .limit(20);
+    const businessIds = (ownerLinks || []).map((r: any) => r.business_id);
+    if (businessIds.length) {
+      const { data: billingRows } = await supabase
+        .from('business_billing')
+        .select('billing_status')
+        .in('business_id', businessIds)
+        .limit(20);
+      const hasCancelled = (billingRows || []).some((r: any) => r.billing_status === 'cancelled');
+      if (hasCancelled) {
+        return NextResponse.json({ error: 'Owner portal access is disabled for this business. Contact support.' }, { status: 403 });
+      }
+    }
+
     const policyError = validateOwnerPasswordPolicy(parsed.password);
     if (policyError) {
       return NextResponse.json({ error: `Password policy update required: ${policyError}` }, { status: 403 });
