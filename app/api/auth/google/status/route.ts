@@ -30,15 +30,23 @@ export async function GET(req: NextRequest) {
 
     if (hasBearer && !isAdminBearer) {
       const { user, supabase } = await requireOwner(req);
-      const { data: business } = await supabase.from('businesses').select('id').eq('slug', businessId).single();
-      if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
-      const { data: ownership } = await supabase
+      const { data: ownershipRows, error: ownErr } = await supabase
         .from('business_owners')
         .select('business_id')
-        .eq('business_id', business.id)
         .eq('owner_user_id', user.id)
+        .limit(20);
+      if (ownErr) return NextResponse.json({ error: ownErr.message }, { status: 400 });
+      const ownerBusinessIds = (ownershipRows || []).map((r: any) => r.business_id);
+      if (!ownerBusinessIds.length) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+      const { data: ownedBiz, error: bizErr } = await supabase
+        .from('businesses')
+        .select('id')
+        .in('id', ownerBusinessIds)
+        .eq('slug', businessId)
         .limit(1);
-      if (!ownership || ownership.length === 0) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (bizErr) return NextResponse.json({ error: bizErr.message }, { status: 400 });
+      if (!ownedBiz || ownedBiz.length === 0) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const store = getStore();
