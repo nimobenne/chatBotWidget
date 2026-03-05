@@ -4,6 +4,7 @@ import { getStore } from '@/lib/store';
 import { BusinessConfig } from '@/lib/types';
 import { isAdminAuthed } from '@/lib/adminAuth';
 import { getSupabaseServiceClient } from '@/lib/ownerCredentials';
+import { logAdminAudit } from '@/lib/adminAudit';
 
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,6 +19,12 @@ export async function POST(req: NextRequest) {
 
     try {
       await getStore().saveBusinessConfig({ ...business, bookingMode: 'calendar' });
+      await logAdminAudit(req, {
+        action: 'business_upsert',
+        targetType: 'business',
+        targetId: business.businessId,
+        meta: { source: 'store' }
+      });
       return NextResponse.json({ ok: true });
     } catch {
       const supabase = getSupabaseServiceClient();
@@ -42,6 +49,12 @@ export async function POST(req: NextRequest) {
       };
       const { error } = await supabase.from('businesses').upsert(sbRecord, { onConflict: 'slug' });
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      await logAdminAudit(req, {
+        action: 'business_upsert',
+        targetType: 'business',
+        targetId: business.businessId,
+        meta: { source: 'service-role-fallback' }
+      });
       return NextResponse.json({ ok: true, store: 'service-role-fallback' });
     }
   } catch (error) {
@@ -90,6 +103,12 @@ export async function DELETE(req: NextRequest) {
       .delete()
       .eq('id', businessDbId);
     if (deleteBusinessErr) return NextResponse.json({ error: deleteBusinessErr.message }, { status: 400 });
+
+    await logAdminAudit(req, {
+      action: 'business_delete_cascade',
+      targetType: 'business',
+      targetId: parsed.businessId
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

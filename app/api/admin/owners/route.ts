@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseServiceClient, hashOwnerPassword } from '@/lib/ownerCredentials';
 import { isAdminAuthed } from '@/lib/adminAuth';
+import { logAdminAudit } from '@/lib/adminAudit';
 
 const upsertSchema = z.object({
   username: z.string().trim().min(3).max(64),
@@ -93,6 +94,13 @@ export async function POST(req: NextRequest) {
       );
     if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 400 });
 
+    await logAdminAudit(req, {
+      action: 'owner_upsert',
+      targetType: 'owner',
+      targetId: owner.id,
+      meta: { username: owner.username, businessId: parsed.businessId }
+    });
+
     return NextResponse.json({ ok: true, owner: { id: owner.id, username: owner.username } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
@@ -113,6 +121,11 @@ export async function PATCH(req: NextRequest) {
         .update({ is_active: isActive, updated_at: new Date().toISOString() })
         .eq('id', payload.ownerId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      await logAdminAudit(req, {
+        action: isActive ? 'owner_activate' : 'owner_deactivate',
+        targetType: 'owner',
+        targetId: payload.ownerId
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -129,6 +142,12 @@ export async function PATCH(req: NextRequest) {
         .eq('id', payload.ownerId);
       if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 400 });
 
+      await logAdminAudit(req, {
+        action: 'owner_delete',
+        targetType: 'owner',
+        targetId: payload.ownerId
+      });
+
       return NextResponse.json({ ok: true });
     }
 
@@ -137,6 +156,11 @@ export async function PATCH(req: NextRequest) {
       .update({ password_hash: hashOwnerPassword(payload.newPassword), updated_at: new Date().toISOString() })
       .eq('id', payload.ownerId);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    await logAdminAudit(req, {
+      action: 'owner_reset_password',
+      targetType: 'owner',
+      targetId: payload.ownerId
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';

@@ -5,6 +5,7 @@ import { getStore } from '@/lib/store';
 import { requireOwner } from '@/lib/ownerAuth';
 import { isAdminAuthed, verifyAdminToken } from '@/lib/adminAuth';
 import { getRequestContext } from '@/lib/observability';
+import { logAdminAudit } from '@/lib/adminAudit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -76,11 +77,21 @@ export async function GET(req: NextRequest) {
     }
 
     const nonce = randomUUID();
-    const authUrl = getGoogleAuthUrl(businessId, nonce, hasBearer && !isAdminBearer ? 'owner' : 'admin');
+    const source = hasBearer && !isAdminBearer ? 'owner' : 'admin';
+    const authUrl = getGoogleAuthUrl(businessId, nonce, source);
     const mode = req.nextUrl.searchParams.get('mode') || '';
     const res = mode === 'url'
       ? NextResponse.json({ url: authUrl })
       : NextResponse.redirect(authUrl);
+
+    if (source === 'admin') {
+      await logAdminAudit(req, {
+        action: reconnect ? 'calendar_reconnect_start' : 'calendar_connect_start',
+        targetType: 'business',
+        targetId: businessId
+      });
+    }
+
     res.cookies.set('google_oauth_state', nonce, {
       httpOnly: true,
       sameSite: 'lax',

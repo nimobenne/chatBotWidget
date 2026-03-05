@@ -56,6 +56,7 @@ export default function AdminPage() {
   const [businesses, setBusinesses] = useState<BusinessConfig[]>([]);
   const [businessHealth, setBusinessHealth] = useState<Record<string, BusinessHealth>>({});
   const [owners, setOwners] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formStep, setFormStep] = useState(0);
@@ -123,6 +124,9 @@ export default function AdminPage() {
 
     const ownerRows = await requestJson('/api/admin/owners', { headers: adminHeaders() });
     setOwners(ownerRows.owners || []);
+
+    const auditRows = await requestJson('/api/admin/audit', { headers: adminHeaders() });
+    setAuditLogs(auditRows.logs || []);
   }
 
   useEffect(() => {
@@ -523,6 +527,18 @@ export default function AdminPage() {
           {sqlResult ? (
             <pre style={{ marginTop: 10, background: '#020617', color: '#93c5fd', padding: 10, borderRadius: 8 }}>{sqlResult}</pre>
           ) : null}
+
+          <h3 style={{ marginTop: 16 }}>Recent Admin Audit Logs</h3>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {auditLogs.slice(0, 20).map((log) => (
+              <div key={log.id} style={{ border: '1px solid #334155', borderRadius: 8, padding: 8, background: '#111827' }}>
+                <div style={{ fontSize: 13 }}>
+                  <strong>{log.action}</strong> - {log.target_type}:{log.target_id}
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(log.created_at).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
