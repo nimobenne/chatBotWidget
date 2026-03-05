@@ -1,5 +1,11 @@
 import './globals.css';
 import type { ReactNode } from 'react';
+import { Plus_Jakarta_Sans } from 'next/font/google';
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  display: 'swap'
+});
 
 export const metadata = {
   title: 'WidgetAI',
@@ -9,11 +15,13 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className={plusJakarta.className}>
         {children}
-        <footer style={{ marginTop: 32, borderTop: '1px solid #1e293b', padding: '16px 20px', color: '#94a3b8', fontSize: 13, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <div><strong style={{ color: '#e2e8f0' }}>WidgetAI</strong></div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <footer className="mx-auto mt-10 flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-5 text-sm text-muted-foreground">
+          <div>
+            <strong className="text-foreground">WidgetAI</strong>
+          </div>
+          <div className="flex flex-wrap gap-3">
             <a href="mailto:nimobenne@gmail.com">nimobenne@gmail.com</a>
             <a href="https://wa.me/31610431511" target="_blank" rel="noreferrer">WhatsApp</a>
             <a href="/privacy">Privacy</a>
