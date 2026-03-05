@@ -12,10 +12,42 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const business = (await req.json()) as BusinessConfig;
-  await getStore().saveBusinessConfig({ ...business, bookingMode: 'calendar' });
-  return NextResponse.json({ ok: true });
+  try {
+    if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const business = (await req.json()) as BusinessConfig;
+
+    try {
+      await getStore().saveBusinessConfig({ ...business, bookingMode: 'calendar' });
+      return NextResponse.json({ ok: true });
+    } catch {
+      const supabase = getSupabaseServiceClient();
+      const sbRecord = {
+        slug: business.businessId,
+        name: business.name,
+        timezone: business.timezone,
+        hours: business.hours,
+        services: business.services,
+        policies: business.policies,
+        phone: business.contact.phone,
+        email: business.contact.email,
+        address: business.contact.address,
+        faqs: business.faq,
+        allowed_domains: business.allowedDomains,
+        booking_mode: 'calendar',
+        slot_interval_min: 30,
+        buffer_min: 10,
+        booking_window_days: 30,
+        widget_style: business.styling,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('businesses').upsert(sbRecord, { onConflict: 'slug' });
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ ok: true, store: 'service-role-fallback' });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }
 
 const deleteSchema = z.object({

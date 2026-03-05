@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleAuthUrl } from '@/lib/calendar';
 import { getStore } from '@/lib/store';
 import { requireOwner } from '@/lib/ownerAuth';
-import { isAdminAuthed } from '@/lib/adminAuth';
+import { isAdminAuthed, verifyAdminToken } from '@/lib/adminAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,11 +18,13 @@ export async function GET(req: NextRequest) {
 
     const authHeader = req.headers.get('authorization') || '';
     const hasBearer = authHeader.startsWith('Bearer ');
+    const bearerToken = hasBearer ? authHeader.slice(7) : '';
+    const isAdminBearer = !!bearerToken && verifyAdminToken(bearerToken);
     if (!hasBearer && !isAdminAuthed(req)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (hasBearer) {
+    if (hasBearer && !isAdminBearer) {
       const { user, supabase } = await requireOwner(req);
       const { data: business } = await supabase.from('businesses').select('id').eq('slug', businessId).single();
       if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     const nonce = randomUUID();
-    const authUrl = getGoogleAuthUrl(businessId, nonce, hasBearer ? 'owner' : 'admin');
+    const authUrl = getGoogleAuthUrl(businessId, nonce, hasBearer && !isAdminBearer ? 'owner' : 'admin');
     const mode = req.nextUrl.searchParams.get('mode') || '';
     const res = mode === 'url'
       ? NextResponse.json({ url: authUrl })

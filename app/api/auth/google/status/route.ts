@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getStore } from '@/lib/store';
 import { requireOwner } from '@/lib/ownerAuth';
-import { isAdminAuthed } from '@/lib/adminAuth';
+import { isAdminAuthed, verifyAdminToken } from '@/lib/adminAuth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -24,9 +24,11 @@ export async function GET(req: NextRequest) {
 
     const authHeader = req.headers.get('authorization') || '';
     const hasBearer = authHeader.startsWith('Bearer ');
+    const bearerToken = hasBearer ? authHeader.slice(7) : '';
+    const isAdminBearer = !!bearerToken && verifyAdminToken(bearerToken);
     if (!hasBearer && !isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (hasBearer) {
+    if (hasBearer && !isAdminBearer) {
       const { user, supabase } = await requireOwner(req);
       const { data: business } = await supabase.from('businesses').select('id').eq('slug', businessId).single();
       if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
