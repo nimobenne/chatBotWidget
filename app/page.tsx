@@ -22,11 +22,11 @@ export default function HomePage() {
             href={link.href}
             style={{
               padding: '8px 14px',
-              border: '1px solid #cbd5e1',
+              border: '1px solid #334155',
               borderRadius: 999,
               textDecoration: 'none',
-              color: '#0f172a',
-              background: '#f8fafc'
+              color: '#e2e8f0',
+              background: '#111827'
             }}
           >
             {link.label}
