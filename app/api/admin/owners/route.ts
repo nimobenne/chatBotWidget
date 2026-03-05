@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getSupabaseServiceClient, hashOwnerPassword } from '@/lib/ownerCredentials';
 import { isAdminAuthed } from '@/lib/adminAuth';
 import { logAdminAudit } from '@/lib/adminAudit';
+import { validateOwnerPasswordPolicy } from '@/lib/passwordPolicy';
 
 const upsertSchema = z.object({
   username: z.string().trim().min(3).max(64),
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest) {
   try {
     if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const parsed = upsertSchema.parse(await req.json());
+    const policyError = validateOwnerPasswordPolicy(parsed.password);
+    if (policyError) return NextResponse.json({ error: policyError }, { status: 400 });
     const supabase = getSupabaseServiceClient();
     const username = parsed.username.toLowerCase();
     const passwordHash = hashOwnerPassword(parsed.password);
@@ -112,6 +115,10 @@ export async function PATCH(req: NextRequest) {
   try {
     if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = actionSchema.parse(await req.json());
+    if (payload.action === 'reset_password') {
+      const policyError = validateOwnerPasswordPolicy(payload.newPassword);
+      if (policyError) return NextResponse.json({ error: policyError }, { status: 400 });
+    }
     const supabase = getSupabaseServiceClient();
 
     if (payload.action === 'deactivate' || payload.action === 'activate') {
@@ -156,6 +163,23 @@ export async function PATCH(req: NextRequest) {
       .update({ password_hash: hashOwnerPassword(payload.newPassword), updated_at: new Date().toISOString() })
       .eq('id', payload.ownerId);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    const { data: ownerRow } = await supabase
+      .from('owner_accounts')
+      .select('username')
+      .eq('id', payload.ownerId)
+      .single();
+    if (ownerRow?.username) {
+      await supabase
+        .from('owner_login_security')
+        .upsert({
+          username: ownerRow.username,
+          failed_count: 0,
+          locked_until: null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'username' });
+    }
+
     await logAdminAudit(req, {
       action: 'owner_reset_password',
       targetType: 'owner',
