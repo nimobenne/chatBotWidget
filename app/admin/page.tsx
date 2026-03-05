@@ -84,6 +84,15 @@ export default function AdminPage() {
     [businesses, sqlBusinessId]
   );
 
+  const adminStats = useMemo(() => {
+    const totalBusinesses = billingClients.length;
+    const activePaid = billingClients.filter((c) => c.billing?.billing_status === 'active_paid').length;
+    const readyToInvoice = billingClients.filter((c) => c.readyToInvoice).length;
+    const overdue = billingClients.filter((c) => c.billing?.billing_status === 'overdue').length;
+    const bookings30d = billingClients.reduce((sum, c) => sum + Number(c.confirmedBookings30d || 0), 0);
+    return { totalBusinesses, activePaid, readyToInvoice, overdue, bookings30d };
+  }, [billingClients]);
+
   function adminHeaders(includeJson = false) {
     return {
       ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
@@ -481,6 +490,14 @@ export default function AdminPage() {
         <button style={{ marginLeft: 'auto' }} onClick={() => { setAdminToken(''); setPassword(''); }}>Sign Out</button>
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 8, marginBottom: 14 }}>
+        <Stat title="Businesses" value={adminStats.totalBusinesses} />
+        <Stat title="Active Paid" value={adminStats.activePaid} />
+        <Stat title="Ready to Invoice" value={adminStats.readyToInvoice} />
+        <Stat title="Overdue" value={adminStats.overdue} />
+        <Stat title="Confirmed 30d" value={adminStats.bookings30d} />
+      </div>
+
       {activeTab === 'businesses' && (
         <section>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -799,5 +816,14 @@ export default function AdminPage() {
 
       {message ? <p style={{ marginTop: 14 }}>{message}</p> : null}
     </main>
+  );
+}
+
+function Stat({ title, value }: { title: string; value: string | number }) {
+  return (
+    <div style={{ border: '1px solid #334155', borderRadius: 10, padding: 10, background: '#0b1220' }}>
+      <div style={{ fontSize: 12, color: '#94a3b8' }}>{title}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
+    </div>
   );
 }

@@ -153,41 +153,48 @@ export default function OwnerPage() {
 
   if (!token) {
     return (
-      <main style={{ maxWidth: 520, margin: '50px auto', padding: 20 }}>
-        <h1>Owner Portal</h1>
-        <p>Use your admin-provided username and password.</p>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Username"
-            style={{ padding: 8 }}
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            style={{ padding: 8 }}
-          />
-          <button onClick={login} style={{ padding: '8px 14px' }}>Sign In</button>
+      <main style={{ maxWidth: 520, margin: '80px auto', padding: 20 }}>
+        <div style={{ border: '1px solid #334155', borderRadius: 14, background: '#0b1220', padding: 20 }}>
+          <h1 style={{ marginTop: 0 }}>Owner Portal</h1>
+          <p style={{ color: '#94a3b8' }}>Use your admin-provided username and password.</p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              style={{ padding: 8 }}
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              style={{ padding: 8 }}
+            />
+            <button onClick={login} style={{ padding: '10px 14px' }}>Sign In</button>
+          </div>
+          {msg ? <p style={{ marginTop: 10 }}>{msg}</p> : null}
         </div>
-        {msg ? <p>{msg}</p> : null}
       </main>
     );
   }
 
+  const roi = dashboard?.roi || {};
+  const metrics = dashboard?.metrics || {};
+  const monthlyCost = Number(dashboard?.billing?.monthlyCostEur || 50);
+
   return (
-    <main style={{ maxWidth: 1040, margin: '30px auto', padding: 20 }}>
-      <h1>Owner Dashboard</h1>
-      <p>Connect calendar and track bookings.</p>
-      <div style={{ marginBottom: 12 }}>
+    <main style={{ maxWidth: 1120, margin: '24px auto', padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ margin: 0 }}>Owner Dashboard</h1>
+          <div style={{ color: '#94a3b8' }}>See your ROI, bookings, and growth performance at a glance.</div>
+        </div>
         <button onClick={logout} style={{ padding: '8px 14px' }}>Sign Out</button>
       </div>
 
-      <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <h3>Assigned Business</h3>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+      <section style={{ marginTop: 14, border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#111827' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
           <select value={selectedBusinessId} onChange={(e) => {
             setSelectedBusinessId(e.target.value);
             loadDashboard(token, e.target.value);
@@ -197,13 +204,13 @@ export default function OwnerPage() {
               <option key={b.businessId} value={b.businessId}>{b.businessId} - {b.name}</option>
             ))}
           </select>
-          <button onClick={connectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Connect Calendar</button>
-          <button onClick={checkCalendarStatus} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Check Calendar Status</button>
-          <button onClick={() => exportCsv('bookings')} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Export Bookings CSV</button>
-          <button onClick={() => exportCsv('handoffs')} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Export Handoffs CSV</button>
+          <button onClick={connectCalendar} disabled={!selectedBusinessId}>Connect Calendar</button>
+          <button onClick={checkCalendarStatus} disabled={!selectedBusinessId}>Check Calendar Status</button>
+          <button onClick={() => exportCsv('bookings')} disabled={!selectedBusinessId}>Export Bookings CSV</button>
+          <button onClick={() => exportCsv('handoffs')} disabled={!selectedBusinessId}>Export Handoffs CSV</button>
         </div>
         {selected ? (
-          <div style={{ fontSize: 14 }}>
+          <div style={{ fontSize: 13, color: '#cbd5e1' }}>
             <div><strong>Timezone:</strong> {selected.timezone}</div>
             <div><strong>Phone:</strong> {selected.contact.phone}</div>
             <div><strong>Services:</strong> {selected.services.map((s) => `${s.name} (${s.durationMin}m)`).join(', ')}</div>
@@ -211,28 +218,56 @@ export default function OwnerPage() {
         ) : null}
       </section>
 
-      <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14 }}>
-        <h3>Analytics (last 30 days)</h3>
-        {dashboard ? (
-          <>
-            {dashboard.billing?.warning ? (
-              <div style={{ marginBottom: 10, padding: 8, borderRadius: 8, background: '#7f1d1d', color: '#fee2e2' }}>
-                {dashboard.billing.warning}
+      {dashboard?.billing?.warning ? (
+        <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: '#7f1d1d', color: '#fee2e2', border: '1px solid #991b1b' }}>
+          {dashboard.billing.warning}
+        </div>
+      ) : null}
+
+      <section style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 10 }}>
+        <Stat title="Estimated Revenue (30d)" value={`EUR ${Number(roi.estimatedRevenue30d || 0).toLocaleString()}`} hint="Approximate value generated by confirmed bookings." />
+        <Stat title="ROI Multiple" value={`${Number(roi.roiMultiple || 0).toFixed(2)}x`} hint={`Compared to monthly cost (EUR ${monthlyCost}).`} />
+        <Stat title="Bookings Captured" value={metrics.confirmed30d || 0} hint="Confirmed appointments in the last 30 days." />
+        <Stat title="Calls Saved (est.)" value={roi.estimatedCallsSaved30d || 0} hint="Estimated conversations handled for you." />
+      </section>
+
+      <section style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+        <div style={{ border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#0b1220' }}>
+          <h3 style={{ marginTop: 0 }}>Why this is worth it</h3>
+          <div style={{ color: '#cbd5e1', marginBottom: 8 }}>
+            Estimated value delivered this month: <strong>EUR {Number(roi.estimatedRevenue30d || 0).toLocaleString()}</strong>
+          </div>
+          <div style={{ color: '#cbd5e1', marginBottom: 8 }}>
+            Monthly cost: <strong>EUR {monthlyCost}</strong>
+          </div>
+          <div style={{ color: '#cbd5e1', marginBottom: 8 }}>
+            Approx bookings to cover cost: <strong>{roi.bookingsToCoverCost || 0}</strong>
+          </div>
+          <div style={{ color: '#86efac' }}>Even a few extra haircuts can cover your monthly plan.</div>
+        </div>
+
+        <div style={{ border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#0b1220' }}>
+          <h3 style={{ marginTop: 0 }}>Growth snapshot</h3>
+          <div style={{ marginBottom: 6 }}>After-hours bookings: <strong>{roi.afterHoursBookings30d || 0}</strong></div>
+          <div style={{ marginBottom: 6 }}>Client chats: <strong>{metrics.conversations30d || 0}</strong></div>
+          <div style={{ marginBottom: 6 }}>Chat to booking: <strong>{metrics.conversionRate || 0}%</strong></div>
+          <div style={{ marginBottom: 6 }}>Calendar synced: <strong>{metrics.calendarSynced30d || 0}</strong></div>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 12, border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#0b1220' }}>
+        <h3 style={{ marginTop: 0 }}>Top services</h3>
+        {dashboard?.topServices?.length ? (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {dashboard.topServices.slice(0, 5).map((s: any) => (
+              <div key={s.service} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{s.service}</span>
+                <strong>{s.count}</strong>
               </div>
-            ) : null}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
-              <Stat title="Bookings" value={dashboard.metrics.bookings30d} />
-              <Stat title="Confirmed" value={dashboard.metrics.confirmed30d} />
-              <Stat title="Conversations" value={dashboard.metrics.conversations30d} />
-              <Stat title="Conversion" value={`${dashboard.metrics.conversionRate}%`} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginBottom: 12 }}>
-              <Stat title="Calendar Synced" value={dashboard.metrics.calendarSynced30d} />
-              <Stat title="Top Service" value={dashboard.topServices?.[0]?.service || 'n/a'} />
-            </div>
-          </>
+            ))}
+          </div>
         ) : (
-          <p>Select a business to load dashboard.</p>
+          <p style={{ marginBottom: 0, color: '#94a3b8' }}>No booking data yet.</p>
         )}
       </section>
 
@@ -241,11 +276,12 @@ export default function OwnerPage() {
   );
 }
 
-function Stat({ title, value }: { title: string; value: string | number }) {
+function Stat({ title, value, hint }: { title: string; value: string | number; hint: string }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-      <div style={{ fontSize: 12, color: '#64748b' }}>{title}</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
+    <div style={{ border: '1px solid #334155', borderRadius: 12, padding: 12, background: '#0b1220' }}>
+      <div style={{ fontSize: 12, color: '#94a3b8' }}>{title}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>{value}</div>
+      <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{hint}</div>
     </div>
   );
 }

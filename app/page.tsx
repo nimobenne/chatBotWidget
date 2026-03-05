@@ -11,7 +11,9 @@ export default function HomePage() {
         <p style={{ color: '#cbd5e1', maxWidth: 700 }}>WidgetAI chats with clients, checks live availability, and books directly into your calendar.</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
           <a href={whatsappHref} target="_blank" rel="noreferrer" style={{ background: '#16a34a', color: '#fff', padding: '10px 16px', borderRadius: 10, textDecoration: 'none' }}>Message on WhatsApp</a>
-          <a href="#demo" style={{ background: '#0f172a', color: '#e2e8f0', padding: '10px 16px', borderRadius: 10, textDecoration: 'none', border: '1px solid #334155' }}>Try Live Demo</a>
+          <Link href="/demo/auto?biz=examplebarber" style={{ background: '#0f172a', color: '#e2e8f0', padding: '10px 16px', borderRadius: 10, textDecoration: 'none', border: '1px solid #334155' }}>Try Live Demo</Link>
+          <Link href="/owner" style={{ background: '#0f172a', color: '#e2e8f0', padding: '10px 16px', borderRadius: 10, textDecoration: 'none', border: '1px solid #334155' }}>Owner Login</Link>
+          <Link href="/admin" style={{ background: '#0f172a', color: '#e2e8f0', padding: '10px 16px', borderRadius: 10, textDecoration: 'none', border: '1px solid #334155' }}>Admin Login</Link>
         </div>
         <div style={{ marginTop: 14, color: '#86efac' }}>€50/month · Setup fee waived (normally €99) · No charge until first 5 bookings</div>
       </section>
@@ -38,7 +40,8 @@ export default function HomePage() {
           <li>If not valid, customer gets fallback to call the business</li>
         </ol>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link href="/demo?biz=examplebarber" style={{ padding: '8px 12px', borderRadius: 10, background: '#16a34a', color: '#fff', textDecoration: 'none' }}>Open Interactive Demo</Link>
+          <Link href="/demo/auto?biz=examplebarber" style={{ padding: '8px 12px', borderRadius: 10, background: '#16a34a', color: '#fff', textDecoration: 'none' }}>Open Auto Demo</Link>
+          <Link href="/demo?biz=examplebarber" style={{ padding: '8px 12px', borderRadius: 10, background: '#1e293b', color: '#e2e8f0', textDecoration: 'none' }}>Open Manual Demo</Link>
           <Link href="/admin" style={{ padding: '8px 12px', borderRadius: 10, background: '#1e293b', color: '#e2e8f0', textDecoration: 'none' }}>Open Admin Portal</Link>
         </div>
       </section>
