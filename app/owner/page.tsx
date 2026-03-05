@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { friendlyError } from '@/lib/userError';
 
 type OwnerBusiness = {
   businessId: string;
@@ -44,7 +45,7 @@ export default function OwnerPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      setMsg(data.error || 'Login failed');
+      setMsg(friendlyError(data));
       return;
     }
     const nextToken = data.token || '';
@@ -68,7 +69,7 @@ export default function OwnerPage() {
     const data = await res.json();
     if (!res.ok) {
       if (res.status === 401) logout();
-      setMsg(data.error || 'Failed to load businesses');
+      setMsg(friendlyError(data));
       return;
     }
     setBusinesses(data.businesses || []);
@@ -85,7 +86,7 @@ export default function OwnerPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      setMsg(data.error || 'Failed to load dashboard');
+      setMsg(friendlyError(data));
       return;
     }
     setDashboard(data);
@@ -98,7 +99,7 @@ export default function OwnerPage() {
     })
       .then(async (r) => {
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
+        if (!r.ok) throw new Error(friendlyError(data));
         window.location.href = data.url;
       })
       .catch((e) => setMsg(String(e.message || e)));
@@ -111,7 +112,7 @@ export default function OwnerPage() {
     })
       .then(async (r) => {
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'Failed to check calendar status');
+        if (!r.ok) throw new Error(friendlyError(data));
         if (!data.connectedInDb) {
           setMsg(`No calendar connection row exists for ${selectedBusinessId}.`);
           return;
@@ -123,6 +124,31 @@ export default function OwnerPage() {
         setMsg(`Calendar row exists but token is not usable. ${data.checkError || ''}`.trim());
       })
       .catch((e) => setMsg(String(e.message || e)));
+  }
+
+  async function exportCsv(type: 'bookings' | 'handoffs') {
+    if (!selectedBusinessId || !token) return;
+    try {
+      const res = await fetch(`/api/owner/export?type=${type}&businessId=${encodeURIComponent(selectedBusinessId)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(friendlyError(data));
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type}_${selectedBusinessId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setMsg(`${type} export downloaded.`);
+    } catch (error) {
+      setMsg(String((error as any)?.message || error));
+    }
   }
 
   if (!token) {
@@ -173,6 +199,8 @@ export default function OwnerPage() {
           </select>
           <button onClick={connectCalendar} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Connect Calendar</button>
           <button onClick={checkCalendarStatus} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Check Calendar Status</button>
+          <button onClick={() => exportCsv('bookings')} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Export Bookings CSV</button>
+          <button onClick={() => exportCsv('handoffs')} disabled={!selectedBusinessId} style={{ padding: '8px 14px' }}>Export Handoffs CSV</button>
         </div>
         {selected ? (
           <div style={{ fontSize: 14 }}>

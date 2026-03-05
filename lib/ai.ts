@@ -108,11 +108,19 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
     let assistantText = '';
     const message = response.choices[0]?.message;
 
+    const parseArgs = (raw: string) => {
+      try {
+        return JSON.parse(raw || '{}') as Record<string, any>;
+      } catch {
+        return {};
+      }
+    };
+
     if (message?.tool_calls) {
       for (const toolCall of message.tool_calls) {
         if (toolCall.function.name === 'get_available_slots') {
-          const args = JSON.parse(toolCall.function.arguments);
-          let dateStr = args.date || '';
+          const args = parseArgs(toolCall.function.arguments);
+          let dateStr = String(args.date || '');
           
           const lower = dateStr.toLowerCase();
           if (lower.includes('tomorrow')) {
@@ -123,7 +131,13 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
             dateStr = new Date().toISOString().split('T')[0];
           }
 
-          const slots = await getAvailableSlots(business, args.serviceName, {
+          const serviceName = String(args.serviceName || '').trim() || business.services[0]?.name;
+          if (!serviceName) {
+            assistantText = 'Please tell me which service you want to book.';
+            continue;
+          }
+
+          const slots = await getAvailableSlots(business, serviceName, {
             start: `${dateStr}T00:00:00`,
             end: `${dateStr}T23:59:59`
           });
@@ -132,34 +146,48 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
             ? slots.slice(0, 6).map(s => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })).join(', ')
             : 'No availability';
 
-          assistantText = `Available times for ${args.serviceName} on ${dateStr}: ${list}`;
+          assistantText = `Available times for ${serviceName} on ${dateStr}: ${list}`;
         }
 
         if (toolCall.function.name === 'create_booking') {
-          const args = JSON.parse(toolCall.function.arguments);
+          const args = parseArgs(toolCall.function.arguments);
           let dt = args.dateTime;
+
+          const serviceName = String(args.serviceName || '').trim();
+          const customerName = String(args.customerName || '').trim();
+          const customerEmail = String(args.customerEmail || '').trim();
+          if (!serviceName || !dt || !customerName || !customerEmail) {
+            assistantText = 'I can book that right away. Please provide service, date/time, your full name, and email.';
+            continue;
+          }
           
-          if (dt.toLowerCase().includes('tomorrow')) {
+          if (typeof dt === 'string' && dt.toLowerCase().includes('tomorrow')) {
             const t = new Date();
             t.setDate(t.getDate() + 1);
             const time = dt.match(/(\d{1,2}:\d{2})/)?.[1] || '15:00';
             dt = `${t.toISOString().split('T')[0]}T${time}:00`;
           }
 
+          const parsedDt = new Date(dt);
+          if (Number.isNaN(parsedDt.getTime())) {
+            assistantText = `I couldn't understand that date/time. Please share it like "tomorrow 3:00 PM".`;
+            continue;
+          }
+
           try {
             const booking = await createBookingRecord({
               business,
-              serviceName: args.serviceName,
-              startTimeISO: new Date(dt).toISOString(),
-              customerName: args.customerName,
+              serviceName,
+              startTimeISO: parsedDt.toISOString(),
+              customerName,
               customerPhone: args.customerPhone,
-              customerEmail: args.customerEmail,
+              customerEmail,
               status: 'confirmed'
             });
             await sendBookingConfirmation({
-              to: args.customerEmail,
-              customerName: args.customerName,
-              serviceName: args.serviceName,
+              to: customerEmail,
+              customerName,
+              serviceName,
               dateTime: dt,
               businessName: business.name,
               businessAddress: business.contact.address,
@@ -167,7 +195,7 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
             }).catch(() => {});
 
             const fmt = new Date(dt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-            assistantText = `✅ Booked! ${args.customerName} - ${args.serviceName} on ${fmt}. Confirmation sent to ${args.customerEmail}`;
+            assistantText = `✅ Booked! ${customerName} - ${serviceName} on ${fmt}. Confirmation sent to ${customerEmail}`;
           } catch (err) {
             assistantText = `Sorry, that time isn't available. Try another time, or call ${business.contact.phone} and we can book by phone.`;
           }

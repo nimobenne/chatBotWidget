@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     ctx.log('error', 'Chat failed', { error: message });
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, code: 'CHAT_REQUEST_INVALID' }, { status: 400 });
   }
 }
 

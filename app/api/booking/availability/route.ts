@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     ctx.log('error', 'Availability failed', { error: message });
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, code: 'BOOKING_REQUEST_INVALID' }, { status: 400 });
   }
 }
 

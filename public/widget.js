@@ -263,17 +263,43 @@
       }
     }
     const compact = t.match(/\b(\d{1,2})(\d{2})\s*(am|pm)\b/);
-    const time = compact
-      ? [compact[0], compact[1], compact[2], compact[3]]
-      : t.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
-    if (!time) return null;
-    let hh = Number(time[1]);
-    const mm = Number(time[2] || '0');
-    const ap = time[3];
-    if (ap === 'pm' && hh < 12) hh += 12;
-    if (ap === 'am' && hh === 12) hh = 0;
-    if (!ap && t.includes('evening') && hh < 12) hh += 12;
-    if (!ap && t.includes('afternoon') && hh < 12) hh += 12;
+    const colonAmpm = t.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)\b/);
+    const hourAmpm = t.match(/\b(\d{1,2})\s*(am|pm)\b/);
+    const colon24 = t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+
+    let hh = NaN;
+    let mm = 0;
+    if (compact) {
+      hh = Number(compact[1]);
+      mm = Number(compact[2]);
+      const ap = compact[3];
+      if (ap === 'pm' && hh < 12) hh += 12;
+      if (ap === 'am' && hh === 12) hh = 0;
+    } else if (colonAmpm) {
+      hh = Number(colonAmpm[1]);
+      mm = Number(colonAmpm[2]);
+      const ap = colonAmpm[3];
+      if (ap === 'pm' && hh < 12) hh += 12;
+      if (ap === 'am' && hh === 12) hh = 0;
+    } else if (hourAmpm) {
+      hh = Number(hourAmpm[1]);
+      const ap = hourAmpm[2];
+      if (ap === 'pm' && hh < 12) hh += 12;
+      if (ap === 'am' && hh === 12) hh = 0;
+    } else if (colon24) {
+      hh = Number(colon24[1]);
+      mm = Number(colon24[2]);
+    } else if (t.includes('morning')) {
+      hh = 10;
+    } else if (t.includes('afternoon')) {
+      hh = 15;
+    } else if (t.includes('evening')) {
+      hh = 18;
+    } else {
+      return null;
+    }
+
+    if (!Number.isFinite(hh) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
     d.setHours(hh, mm, 0, 0);
     if (Number.isNaN(d.getTime())) return null;
     return d;

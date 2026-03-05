@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { BusinessConfig } from '@/lib/types';
+import { friendlyError } from '@/lib/userError';
 
 const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
@@ -75,6 +76,7 @@ export default function AdminPage() {
   const [sqlText, setSqlText] = useState('');
   const [runningSql, setRunningSql] = useState(false);
   const [sqlResult, setSqlResult] = useState('');
+  const [privacyForm, setPrivacyForm] = useState({ businessId: '', sessionId: '' });
 
   const selectedForSql = useMemo(
     () => businesses.find((b) => b.businessId === sqlBusinessId) || defaultBusiness,
@@ -147,7 +149,7 @@ export default function AdminPage() {
         body: JSON.stringify({ password })
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      if (!res.ok) throw new Error(friendlyError(data));
       setAdminToken(data.token || '');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Login failed');
@@ -226,7 +228,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ...form, bookingMode: 'calendar' })
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      if (!res.ok) throw new Error(friendlyError(data));
       setMessage(`Business ${form.businessId} saved.`);
       setFormOpen(false);
       await loadAdminData();
@@ -246,7 +248,7 @@ export default function AdminPage() {
         body: JSON.stringify({ businessId: deleteTarget, confirmSlug: deleteConfirmSlug })
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      if (!res.ok) throw new Error(friendlyError(data));
       setMessage(`Deleted business ${deleteTarget} and all related data.`);
       setDeleteTarget('');
       setDeleteConfirmSlug('');
@@ -262,7 +264,7 @@ export default function AdminPage() {
     })
       .then(async (r) => {
         const data = await readJsonSafe(r);
-        if (!r.ok) throw new Error(data.error || 'Failed to start OAuth');
+        if (!r.ok) throw new Error(friendlyError(data));
         window.location.href = data.url;
       })
       .catch((e) => setMessage(String(e.message || e)));
@@ -289,7 +291,7 @@ export default function AdminPage() {
         body: JSON.stringify(ownerForm)
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Failed to save owner');
+      if (!res.ok) throw new Error(friendlyError(data));
       setMessage(`Owner ${data.owner.username} saved.`);
       setOwnerForm({ username: '', password: '', businessId: '' });
       await loadAdminData();
@@ -306,7 +308,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ownerId, action })
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(friendlyError(data));
       setMessage(`Owner ${action === 'activate' ? 'activated' : 'deactivated'}.`);
       await loadAdminData();
     } catch (e) {
@@ -324,7 +326,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ownerId, action: 'reset_password', newPassword: nextPassword })
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(friendlyError(data));
       setMessage('Owner password reset.');
       setResetPasswords((prev) => ({ ...prev, [ownerId]: '' }));
     } catch (e) {
@@ -341,7 +343,7 @@ export default function AdminPage() {
         body: JSON.stringify({ ownerId, action: 'delete_owner' })
       });
       const data = await readJsonSafe(res);
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(friendlyError(data));
       setMessage(`Owner ${username} deleted.`);
       await loadAdminData();
     } catch (e) {
@@ -388,6 +390,46 @@ export default function AdminPage() {
       setMessage(m);
     } finally {
       setRunningSql(false);
+    }
+  }
+
+  function exportCsv(type: 'bookings' | 'handoffs', businessId?: string) {
+    const qs = new URLSearchParams({ type, ...(businessId ? { businessId } : {}) });
+    fetch(`/api/admin/export?${qs.toString()}`, { headers: adminHeaders() })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await readJsonSafe(res);
+          throw new Error(friendlyError(data));
+        }
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${type}_${businessId || 'all'}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((e) => setMessage(String(e.message || e)));
+  }
+
+  async function deleteSessionData() {
+    if (!privacyForm.businessId || !privacyForm.sessionId) {
+      setMessage('Provide business id and session id for privacy delete.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/privacy/delete-session', {
+        method: 'POST',
+        headers: adminHeaders(true),
+        body: JSON.stringify(privacyForm)
+      });
+      const data = await readJsonSafe(res);
+      if (!res.ok) throw new Error(friendlyError(data));
+      setMessage(`Deleted conversation history for ${privacyForm.businessId}/${privacyForm.sessionId}.`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Delete failed');
     }
   }
 
@@ -448,6 +490,8 @@ export default function AdminPage() {
                   <button onClick={() => openEditBusiness(b)}>Edit</button>
                   <button onClick={() => connectGoogleCalendar(b.businessId)}>Connect Calendar</button>
                   <button onClick={() => checkCalendarStatus(b.businessId)}>Check Status</button>
+                  <button onClick={() => exportCsv('bookings', b.businessId)}>Export Bookings</button>
+                  <button onClick={() => exportCsv('handoffs', b.businessId)}>Export Handoffs</button>
                   <button onClick={() => { setDeleteTarget(b.businessId); setDeleteConfirmSlug(''); }}>Delete</button>
                 </div>
               </div>
@@ -523,6 +567,8 @@ export default function AdminPage() {
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button onClick={runSql} disabled={runningSql}>{runningSql ? 'Running...' : 'Run in Supabase'}</button>
             <button onClick={() => navigator.clipboard.writeText(sqlText).then(() => setMessage('SQL copied to clipboard.')).catch(() => setMessage('Failed to copy SQL.'))}>Copy SQL</button>
+            <button onClick={() => exportCsv('bookings')}>Export All Bookings CSV</button>
+            <button onClick={() => exportCsv('handoffs')}>Export All Handoffs CSV</button>
           </div>
           {sqlResult ? (
             <pre style={{ marginTop: 10, background: '#020617', color: '#93c5fd', padding: 10, borderRadius: 8 }}>{sqlResult}</pre>
@@ -538,6 +584,22 @@ export default function AdminPage() {
                 <div style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(log.created_at).toLocaleString()}</div>
               </div>
             ))}
+          </div>
+
+          <h3 style={{ marginTop: 16 }}>Privacy Controls</h3>
+          <p>Delete stored conversation history for a specific business/session id.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
+            <input
+              value={privacyForm.businessId}
+              onChange={(e) => setPrivacyForm((p) => ({ ...p, businessId: e.target.value }))}
+              placeholder="business id"
+            />
+            <input
+              value={privacyForm.sessionId}
+              onChange={(e) => setPrivacyForm((p) => ({ ...p, sessionId: e.target.value }))}
+              placeholder="session id"
+            />
+            <button onClick={deleteSessionData}>Delete Session Data</button>
           </div>
         </section>
       )}
