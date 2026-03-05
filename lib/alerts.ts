@@ -7,9 +7,9 @@ export async function sendAlertEmail(input: {
   context?: Record<string, unknown>;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.ALERT_EMAIL_TO || 'randomfacts036@gmail.com';
+  const to = process.env.ALERT_EMAIL_TO;
   const from = process.env.ALERT_EMAIL_FROM;
-  if (!apiKey || !from) return;
+  if (!apiKey || !from || !to) return;
 
   const subject = `[WidgetAI][${input.severity.toUpperCase()}] ${input.title}`;
   const html = `

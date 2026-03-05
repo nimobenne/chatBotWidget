@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { isAdminAuthed } from '@/lib/adminAuth';
 import { getStore } from '@/lib/store';
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/google/callback`;
-
-function oauthClient(refreshToken: string, tokenType: string, scope: string) {
-  const client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-  client.setCredentials({ refresh_token: refreshToken, token_type: tokenType, scope });
-  return client;
-}
+import { getOAuthClient } from '@/lib/calendar';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,7 +33,7 @@ export async function GET(req: NextRequest) {
           issues.push('Calendar not connected');
         } else {
           try {
-            const auth = oauthClient(conn.refreshToken, conn.tokenType, conn.scope);
+            const auth = getOAuthClient(conn.refreshToken, conn.tokenType, conn.scope);
             const calendar = google.calendar({ version: 'v3', auth });
             await calendar.calendarList.list({ maxResults: 1 });
             calendarUsable = true;

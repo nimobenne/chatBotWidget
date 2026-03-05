@@ -1,5 +1,8 @@
 export function csvEscape(value: unknown): string {
   const raw = String(value ?? '');
+  if (/^[=+\-@]/.test(raw)) {
+    return `"\t${raw.replace(/"/g, '""')}"`;
+  }
   if (/[",\n]/.test(raw)) {
     return `"${raw.replace(/"/g, '""')}"`;
   }

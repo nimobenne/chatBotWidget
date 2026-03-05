@@ -16,7 +16,7 @@ export interface BusyRange {
   endISO: string;
 }
 
-function getOAuthClient(refreshToken: string, tokenType: string, scope: string) {
+export function getOAuthClient(refreshToken: string, tokenType: string, scope: string) {
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,

@@ -100,6 +100,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
-    return NextResponse.json({ error: message }, { status: 400 });
+    const isAuthError = message === 'Missing bearer token' || message === 'Unauthorized';
+    return NextResponse.json({ error: message }, { status: isAuthError ? 401 : 400 });
   }
 }
