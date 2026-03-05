@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getStore } from '@/lib/store';
 import { createBookingRecord } from '@/lib/booking';
 import { sendBookingConfirmation } from '@/lib/email';
 import { getRequestContext, extractOriginHost } from '@/lib/observability';
 import { verifyWidgetToken } from '@/lib/widgetToken';
+import { getSupabaseServiceClient } from '@/lib/ownerCredentials';
 
 const schema = z.object({
   businessId: z.string().min(1),
@@ -12,8 +14,106 @@ const schema = z.object({
   startTimeISO: z.string().datetime(),
   customerName: z.string().min(1),
   customerEmail: z.string().email(),
-  customerPhone: z.string().optional()
+  customerPhone: z.string().optional(),
+  idempotencyKey: z.string().min(8).max(200).optional()
 });
+
+function payloadHash(parsed: z.infer<typeof schema>): string {
+  const basis = JSON.stringify({
+    businessId: parsed.businessId,
+    serviceName: parsed.serviceName,
+    startTimeISO: parsed.startTimeISO,
+    customerName: parsed.customerName,
+    customerEmail: parsed.customerEmail,
+    customerPhone: parsed.customerPhone || ''
+  });
+  return createHash('sha256').update(basis).digest('hex');
+}
+
+async function beginIdempotentCreate(parsed: z.infer<typeof schema>, idempotencyKey: string) {
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('slug', parsed.businessId)
+      .single();
+    if (!business) return { enabled: false as const };
+
+    const hash = payloadHash(parsed);
+    const businessDbId = business.id;
+    const now = new Date().toISOString();
+
+    const { error: insertErr } = await supabase
+      .from('booking_idempotency_keys')
+      .insert({
+        business_id: businessDbId,
+        idempotency_key: idempotencyKey,
+        request_hash: hash,
+        status: 'processing',
+        created_at: now,
+        updated_at: now
+      });
+
+    if (!insertErr) {
+      return { enabled: true as const, businessDbId, hash, replayResponse: null };
+    }
+
+    const { data: existing } = await supabase
+      .from('booking_idempotency_keys')
+      .select('request_hash, status, response_payload')
+      .eq('business_id', businessDbId)
+      .eq('idempotency_key', idempotencyKey)
+      .single();
+
+    if (!existing) return { enabled: false as const };
+    if (existing.request_hash !== hash) {
+      return {
+        enabled: true as const,
+        businessDbId,
+        hash,
+        replayResponse: null,
+        conflict: 'Idempotency key was reused with different booking payload.'
+      };
+    }
+    if (existing.status === 'completed' && existing.response_payload) {
+      return { enabled: true as const, businessDbId, hash, replayResponse: existing.response_payload };
+    }
+
+    return {
+      enabled: true as const,
+      businessDbId,
+      hash,
+      replayResponse: null,
+      inProgress: true
+    };
+  } catch {
+    return { enabled: false as const };
+  }
+}
+
+async function finalizeIdempotentCreate(args: {
+  businessDbId: string;
+  idempotencyKey: string;
+  hash: string;
+  responsePayload: Record<string, unknown>;
+}) {
+  try {
+    const supabase = getSupabaseServiceClient();
+    await supabase
+      .from('booking_idempotency_keys')
+      .update({
+        status: 'completed',
+        response_payload: args.responsePayload,
+        updated_at: new Date().toISOString()
+      })
+      .eq('business_id', args.businessDbId)
+      .eq('idempotency_key', args.idempotencyKey)
+      .eq('request_hash', args.hash);
+  } catch {
+    // non-fatal
+  }
+}
 
 export async function POST(req: NextRequest) {
   const ctx = getRequestContext(req, 'POST /api/booking/create');
@@ -48,6 +148,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unauthorized widget request: ${tokenCheck.reason}` }, { status: 401 });
     }
 
+    const incomingKey = (req.headers.get('x-idempotency-key') || parsed.idempotencyKey || '').trim();
+    let idem:
+      | { enabled: false }
+      | { enabled: true; businessDbId: string; hash: string; replayResponse: any; conflict?: string; inProgress?: boolean };
+    if (incomingKey) {
+      idem = await beginIdempotentCreate(parsed, incomingKey);
+      if (idem.enabled && idem.conflict) {
+        return NextResponse.json({ error: idem.conflict }, { status: 409 });
+      }
+      if (idem.enabled && idem.inProgress) {
+        return NextResponse.json({ error: 'Duplicate booking is currently being processed. Please retry shortly.' }, { status: 409 });
+      }
+      if (idem.enabled && idem.replayResponse) {
+        const replayRes = NextResponse.json({ ...idem.replayResponse, idempotentReplay: true });
+        if (origin && host && (isSameHost || isAllowed)) {
+          replayRes.headers.set('Access-Control-Allow-Origin', origin);
+          replayRes.headers.set('Vary', 'Origin');
+        }
+        ctx.log('info', 'Booking replayed from idempotency cache', { businessId: parsed.businessId });
+        return replayRes;
+      }
+    } else {
+      idem = { enabled: false };
+    }
+
     const booking = await createBookingRecord({
       business,
       serviceName: parsed.serviceName,
@@ -73,6 +198,20 @@ export async function POST(req: NextRequest) {
       startTimeISO: booking.startTimeISO,
       message: 'Booking confirmed'
     });
+
+    if (incomingKey && idem.enabled) {
+      await finalizeIdempotentCreate({
+        businessDbId: idem.businessDbId,
+        idempotencyKey: incomingKey,
+        hash: idem.hash,
+        responsePayload: {
+          bookingId: booking.bookingId,
+          startTimeISO: booking.startTimeISO,
+          message: 'Booking confirmed'
+        }
+      });
+    }
+
     if (origin && host && (isSameHost || isAllowed)) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
@@ -91,6 +230,6 @@ export const OPTIONS = async (req: NextRequest) => {
   const res = new NextResponse(null, { status: 204 });
   res.headers.set('Access-Control-Allow-Origin', origin);
   res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token');
+  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token, x-idempotency-key');
   return res;
 };

@@ -388,15 +388,29 @@
   }
 
   async function createBooking() {
+    const idemKey = [
+      businessId,
+      sessionId,
+      booking.serviceName,
+      booking.selectedSlotISO,
+      (booking.customerName || '').toLowerCase().trim(),
+      (booking.customerEmail || '').toLowerCase().trim()
+    ].join('|').slice(0, 190);
+
     const res = await fetch(`${apiBase}/api/booking/create`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-widget-token': widgetToken,
+        'x-idempotency-key': idemKey
+      },
       body: JSON.stringify({
         businessId,
         serviceName: booking.serviceName,
         startTimeISO: booking.selectedSlotISO,
         customerName: booking.customerName,
-        customerEmail: booking.customerEmail
+        customerEmail: booking.customerEmail,
+        idempotencyKey: idemKey
       })
     });
     return res.json();
