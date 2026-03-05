@@ -118,6 +118,11 @@ export async function createBookingRecord(params: {
   end.setMinutes(end.getMinutes() + service.durationMin + (service.bufferMin ?? 0));
 
   if (params.status === 'confirmed') {
+    const calendarConn = await store.getGoogleCalendarConnection(params.business.businessId);
+    if (!calendarConn) {
+      throw new Error('Online booking is unavailable right now. Please call the business to book by phone.');
+    }
+
     const existing = await store.listBookings(params.business.businessId);
     const conflict = existing.some((b) => overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
     if (conflict) {
@@ -152,12 +157,16 @@ export async function createBookingRecord(params: {
   if (params.status === 'confirmed') {
     try {
       const calendarResult = await createCalendarEvent(booking, params.business);
-      if (calendarResult?.eventId) {
-        await store.updateBookingCalendarEvent(booking.bookingId, calendarResult.eventId).catch(() => null);
-        console.log('Calendar event created:', calendarResult.htmlLink);
+      if (!calendarResult?.eventId) {
+        await store.deleteBooking(booking.bookingId).catch(() => null);
+        throw new Error('Calendar event was not created. Please try again.');
       }
+      await store.updateBookingCalendarEvent(booking.bookingId, calendarResult.eventId).catch(() => null);
+      console.log('Calendar event created:', calendarResult.htmlLink);
     } catch (error) {
+      await store.deleteBooking(booking.bookingId).catch(() => null);
       console.error('Failed to create calendar event:', error);
+      throw new Error('Unable to confirm booking in calendar. Please try again or call the business.');
     }
   }
 

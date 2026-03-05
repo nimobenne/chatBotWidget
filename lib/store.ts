@@ -15,6 +15,7 @@ export interface DataStore {
   saveBusinessConfig(business: BusinessConfig): Promise<void>;
   listBookings(businessId: string): Promise<BookingRecord[]>;
   createBooking(record: Omit<BookingRecord, 'bookingId' | 'createdAt'>): Promise<BookingRecord>;
+  deleteBooking(bookingId: string): Promise<void>;
   updateBookingCalendarEvent(bookingId: string, eventId: string): Promise<void>;
   createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord>;
   logConversation(log: ConversationLog): Promise<void>;
@@ -82,6 +83,12 @@ class JsonDataStore implements DataStore {
 
   async updateBookingCalendarEvent(_bookingId: string, _eventId: string): Promise<void> {
     // JSON fallback store does not persist calendar event ids separately.
+  }
+
+  async deleteBooking(bookingId: string): Promise<void> {
+    const bookings = await readJson<BookingRecord[]>(BOOKINGS_PATH, []);
+    const filtered = bookings.filter((b) => b.bookingId !== bookingId);
+    await writeJson(BOOKINGS_PATH, filtered);
   }
 
   async createHandoff(record: Omit<HandoffRecord, 'handoffId' | 'createdAt'>): Promise<HandoffRecord> {
@@ -335,6 +342,14 @@ class SupabaseDataStore implements DataStore {
     const { error } = await this.client
       .from('bookings')
       .update({ calendar_event_id: eventId })
+      .eq('id', bookingId);
+    if (error) throw new Error(error.message);
+  }
+
+  async deleteBooking(bookingId: string): Promise<void> {
+    const { error } = await this.client
+      .from('bookings')
+      .delete()
       .eq('id', bookingId);
     if (error) throw new Error(error.message);
   }
