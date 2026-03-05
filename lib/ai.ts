@@ -2,7 +2,6 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { getStore } from './store';
 import { getAvailableSlots, createBookingRecord } from './booking';
-import { createCalendarEvent } from './calendar';
 import { sendBookingConfirmation } from './email';
 
 const inputSchema = z.object({
@@ -75,17 +74,17 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
         description: 'Book an appointment',
         parameters: {
           type: 'object',
-          properties: {
-            serviceName: { type: 'string' },
-            dateTime: { type: 'string' },
-            customerName: { type: 'string' },
-            customerPhone: { type: 'string' },
-            customerEmail: { type: 'string' }
-          },
-          required: ['serviceName', 'dateTime', 'customerName', 'customerPhone', 'customerEmail']
+            properties: {
+              serviceName: { type: 'string' },
+              dateTime: { type: 'string' },
+              customerName: { type: 'string' },
+              customerPhone: { type: 'string' },
+              customerEmail: { type: 'string' }
+            },
+            required: ['serviceName', 'dateTime', 'customerName', 'customerEmail']
+          }
         }
       }
-    }
   ] : [];
 
   try {
@@ -157,8 +156,6 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
               customerEmail: args.customerEmail,
               status: 'confirmed'
             });
-
-            await createCalendarEvent(booking, business).catch(() => {});
             await sendBookingConfirmation({
               to: args.customerEmail,
               customerName: args.customerName,

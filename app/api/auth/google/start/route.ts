@@ -48,7 +48,6 @@ export async function GET(req: NextRequest) {
       if (!reconnect) {
         return NextResponse.json({ error: 'A calendar is already connected for this business. Use reconnect=1 to replace it.' }, { status: 409 });
       }
-      await store.removeGoogleCalendarConnection(businessId);
     }
 
     const nonce = randomUUID();

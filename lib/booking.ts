@@ -3,13 +3,51 @@ import { BookingRecord, BusinessConfig, Service } from './types';
 import { createCalendarEvent } from './calendar';
 import { getCalendarBusyRanges } from './calendar';
 
-const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  const parts = dtf.formatToParts(date);
+  const vals: Record<string, string> = {};
+  for (const part of parts) vals[part.type] = part.value;
+  const asUTC = Date.UTC(
+    Number(vals.year),
+    Number(vals.month) - 1,
+    Number(vals.day),
+    Number(vals.hour),
+    Number(vals.minute),
+    Number(vals.second)
+  );
+  return asUTC - date.getTime();
+}
 
-function parseClock(date: Date, hhmm: string): Date {
-  const [hours, mins] = hhmm.split(':').map(Number);
-  const d = new Date(date);
-  d.setHours(hours, mins, 0, 0);
-  return d;
+function zonedLocalToUtc(dateYmd: string, hhmm: string, timeZone: string): Date {
+  const [y, m, d] = dateYmd.split('-').map(Number);
+  const [hh, mm] = hhmm.split(':').map(Number);
+  let utcMs = Date.UTC(y, m - 1, d, hh, mm, 0);
+  let offset = getTimeZoneOffsetMs(new Date(utcMs), timeZone);
+  utcMs -= offset;
+  offset = getTimeZoneOffsetMs(new Date(utcMs), timeZone);
+  utcMs = Date.UTC(y, m - 1, d, hh, mm, 0) - offset;
+  return new Date(utcMs);
+}
+
+function addDaysYmd(dateYmd: string, days: number): string {
+  const d = new Date(`${dateYmd}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function localWeekday(dateYmd: string, timeZone: string): string {
+  const middayUtc = zonedLocalToUtc(dateYmd, '12:00', timeZone);
+  return new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long' }).format(middayUtc).toLowerCase();
 }
 
 function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
@@ -28,27 +66,36 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
   const store = getStore();
   const service = findService(business, serviceName);
   const existing = await store.listBookings(business.businessId);
-  const busyInCalendar = await getCalendarBusyRanges(business, dateRangeISO.start, dateRangeISO.end);
-  const rangeStart = new Date(dateRangeISO.start);
-  const rangeEnd = new Date(dateRangeISO.end);
+  const startYmd = String(dateRangeISO.start).slice(0, 10);
+  const endYmd = String(dateRangeISO.end).slice(0, 10);
+  const calendarRangeStart = zonedLocalToUtc(startYmd, '00:00', business.timezone).toISOString();
+  const calendarRangeEnd = zonedLocalToUtc(endYmd, '23:59', business.timezone).toISOString();
+  const busyInCalendar = await getCalendarBusyRanges(business, calendarRangeStart, calendarRangeEnd);
   const slots: string[] = [];
 
-  for (let day = new Date(rangeStart); day <= rangeEnd; day.setDate(day.getDate() + 1)) {
-    const rule = business.hours[DAY_NAMES[day.getDay()]];
-    if (!rule) continue;
-    const open = parseClock(day, rule.open);
-    const close = parseClock(day, rule.close);
+  let dayYmd = startYmd;
+  while (dayYmd <= endYmd) {
+    const weekday = localWeekday(dayYmd, business.timezone);
+    const rule = business.hours[weekday];
+    if (!rule) {
+      dayYmd = addDaysYmd(dayYmd, 1);
+      continue;
+    }
+
+    const open = zonedLocalToUtc(dayYmd, rule.open, business.timezone);
+    const close = zonedLocalToUtc(dayYmd, rule.close, business.timezone);
     const step = 30;
     for (let cursor = new Date(open); cursor < close; cursor.setMinutes(cursor.getMinutes() + step)) {
       const start = new Date(cursor);
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + service.durationMin + (service.bufferMin ?? 0));
-      if (end > close || start < rangeStart || start > rangeEnd) continue;
+      if (end > close) continue;
       const bookingConflict = existing.some((b: BookingRecord) => overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
       const calendarConflict = busyInCalendar.some((b) => overlaps(start, end, new Date(b.startISO), new Date(b.endISO)));
       const hasConflict = bookingConflict || calendarConflict;
       if (!hasConflict) slots.push(start.toISOString());
     }
+    dayYmd = addDaysYmd(dayYmd, 1);
   }
 
   return slots.slice(0, 20);
@@ -59,7 +106,7 @@ export async function createBookingRecord(params: {
   serviceName: string;
   startTimeISO: string;
   customerName: string;
-  customerPhone: string;
+  customerPhone?: string;
   customerEmail?: string;
   status: 'confirmed' | 'requested';
   notes?: string;
@@ -76,6 +123,18 @@ export async function createBookingRecord(params: {
     if (conflict) {
       throw new Error('Selected time is no longer available.');
     }
+
+    const busyInCalendar = await getCalendarBusyRanges(
+      params.business,
+      new Date(start.getTime() - 60 * 1000).toISOString(),
+      new Date(end.getTime() + 60 * 1000).toISOString()
+    );
+    const calendarConflict = busyInCalendar.some((b) =>
+      overlaps(start, end, new Date(b.startISO), new Date(b.endISO))
+    );
+    if (calendarConflict) {
+      throw new Error('Selected time is no longer available.');
+    }
   }
 
   const booking = await store.createBooking({
@@ -84,7 +143,7 @@ export async function createBookingRecord(params: {
     startTimeISO: start.toISOString(),
     endTimeISO: end.toISOString(),
     customerName: params.customerName,
-    customerPhone: params.customerPhone,
+    customerPhone: params.customerPhone || params.customerEmail || '',
     customerEmail: params.customerEmail,
     status: params.status,
     notes: params.notes

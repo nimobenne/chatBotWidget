@@ -91,6 +91,6 @@ export const OPTIONS = async (req: NextRequest) => {
   const res = new NextResponse(null, { status: 204 });
   res.headers.set('Access-Control-Allow-Origin', origin);
   res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token');
   return res;
 };
