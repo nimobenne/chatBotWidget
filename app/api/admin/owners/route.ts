@@ -12,7 +12,8 @@ const upsertSchema = z.object({
 const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('deactivate'), ownerId: z.string().uuid() }),
   z.object({ action: z.literal('activate'), ownerId: z.string().uuid() }),
-  z.object({ action: z.literal('reset_password'), ownerId: z.string().uuid(), newPassword: z.string().min(8).max(200) })
+  z.object({ action: z.literal('reset_password'), ownerId: z.string().uuid(), newPassword: z.string().min(8).max(200) }),
+  z.object({ action: z.literal('delete_owner'), ownerId: z.string().uuid() })
 ]);
 
 export async function GET(req: NextRequest) {
@@ -112,6 +113,22 @@ export async function PATCH(req: NextRequest) {
         .update({ is_active: isActive, updated_at: new Date().toISOString() })
         .eq('id', payload.ownerId);
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (payload.action === 'delete_owner') {
+      const { error: unlinkErr } = await supabase
+        .from('business_owners')
+        .delete()
+        .eq('owner_user_id', payload.ownerId);
+      if (unlinkErr) return NextResponse.json({ error: unlinkErr.message }, { status: 400 });
+
+      const { error: deleteErr } = await supabase
+        .from('owner_accounts')
+        .delete()
+        .eq('id', payload.ownerId);
+      if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 400 });
+
       return NextResponse.json({ ok: true });
     }
 

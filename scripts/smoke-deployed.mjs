@@ -144,6 +144,22 @@ async function run() {
     logStep('Owner dashboard', ownerDash);
   }
 
+  if (ownerId) {
+    const deleteOwner = await api('/api/admin/owners', {
+      method: 'PATCH',
+      headers: adminHeaders,
+      body: JSON.stringify({ action: 'delete_owner', ownerId })
+    });
+    logStep('Delete owner', deleteOwner);
+
+    const ownerLoginAfterDelete = await api('/api/owner/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: ownerUser, password: ownerPass2 })
+    });
+    logStep('Owner login after delete (should fail)', { ...ownerLoginAfterDelete, ok: !ownerLoginAfterDelete.ok });
+  }
+
   const calStatus = await api(`/api/auth/google/status?businessId=${encodeURIComponent(businessId)}`, {
     headers: { Authorization: `Bearer ${adminToken}` }
   });

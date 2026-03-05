@@ -309,6 +309,23 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteOwner(ownerId: string, username: string) {
+    if (!confirm(`Delete owner ${username}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch('/api/admin/owners', {
+        method: 'PATCH',
+        headers: adminHeaders(true),
+        body: JSON.stringify({ ownerId, action: 'delete_owner' })
+      });
+      const data = await readJsonSafe(res);
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setMessage(`Owner ${username} deleted.`);
+      await loadAdminData();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Error');
+    }
+  }
+
   function buildSqlTemplate() {
     if (templateType === 'assign_owner') {
       const owner = escapeSql(sqlOwnerUsername || 'owner_username_here');
@@ -433,6 +450,7 @@ export default function AdminPage() {
                   {owner.isActive
                     ? <button onClick={() => setOwnerActive(owner.id, 'deactivate')}>Deactivate</button>
                     : <button onClick={() => setOwnerActive(owner.id, 'activate')}>Activate</button>}
+                  <button onClick={() => deleteOwner(owner.id, owner.username)}>Delete Owner</button>
                 </div>
               </div>
             ))}
