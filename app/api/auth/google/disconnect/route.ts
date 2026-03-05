@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
         .select('business_id')
         .eq('business_id', business.id)
         .eq('owner_user_id', user.id)
-        .single();
-      if (!ownership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        .limit(1);
+      if (!ownership || ownership.length === 0) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     } else if (!isAdminAuthed(req)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
