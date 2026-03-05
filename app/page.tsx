@@ -8,7 +8,12 @@ const whatsappHref = 'https://wa.me/31610431511?text=Hi%20WidgetAI%2C%20I%20want
 
 export default function HomePage() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-6 pt-10 md:pt-12">
+    <>
+    <nav className="flex justify-end gap-4 px-5 pt-3 text-xs text-muted-foreground">
+      <Link href="/owner" className="hover:text-foreground transition-colors">Owner Portal</Link>
+      <Link href="/admin" className="hover:text-foreground transition-colors">Admin</Link>
+    </nav>
+    <main className="mx-auto w-full max-w-6xl px-5 pb-6 pt-4 md:pt-6">
       <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-emerald-900/35 via-card to-background p-6 shadow-[0_20px_80px_-40px_rgba(16,185,129,0.55)] md:p-10">
         <div className="pointer-events-none absolute -left-10 top-0 h-48 w-48 rounded-full bg-emerald-400/15 blur-3xl" />
         <div className="pointer-events-none absolute right-0 top-10 h-44 w-44 rounded-full bg-emerald-300/10 blur-3xl" />
@@ -27,14 +32,8 @@ export default function HomePage() {
             <Link href="/demo/auto?biz=examplebarber" className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
               Try Live Demo
             </Link>
-            <Link href="/owner" className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
-              Owner Login
-            </Link>
-            <Link href="/admin" className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
-              Admin Login
-            </Link>
           </div>
-          <div className="mt-5 text-sm font-medium text-emerald-200">€50/month · Setup fee waived (normally €99) · No charge until first 5 bookings</div>
+          <div className="mt-5 text-sm font-medium text-emerald-200">€39.99/month · No charge until first 5 bookings</div>
         </div>
       </section>
 
@@ -57,27 +56,6 @@ export default function HomePage() {
         <TestimonialMarquee />
       </section>
 
-      <section id="demo" className="mt-7 rounded-2xl border border-border bg-card/60 p-6">
-        <h2 className="mt-0 text-2xl font-semibold">Pre-demo flow</h2>
-        <ol className="mt-4 space-y-2 pl-5 text-muted-foreground">
-          <li>Customer asks for tomorrow at 10:00</li>
-          <li>WidgetAI checks business hours + existing bookings + calendar conflicts</li>
-          <li>If valid, booking is created and calendar event is required for confirmation</li>
-          <li>If not valid, customer gets fallback to call the business</li>
-        </ol>
-        <div className="mt-5 flex flex-wrap gap-2.5">
-          <Link href="/demo/auto?biz=examplebarber" className={buttonVariants({ variant: 'default', size: 'sm' })}>
-            Open Auto Demo
-          </Link>
-          <Link href="/demo?biz=examplebarber" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
-            Open Manual Demo
-          </Link>
-          <Link href="/admin" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
-            Open Admin Portal
-          </Link>
-        </div>
-      </section>
-
       <section className="mt-6 rounded-2xl border border-border bg-secondary/35 p-6">
         <h2 className="mt-0 text-2xl font-semibold">How onboarding works</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -96,5 +74,6 @@ export default function HomePage() {
         </div>
       </section>
     </main>
+    </>
   );
 }

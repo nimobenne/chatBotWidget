@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
       .eq('business_id', business.id)
       .single();
 
-    const monthlyCostEur = Number(billing?.plan_amount_eur || 50);
+    const monthlyCostEur = Number(billing?.plan_amount_eur || 39.99);
     const roiMultiple = monthlyCostEur > 0 ? estimatedRevenue30d / monthlyCostEur : 0;
     const bookingsToCoverCost = Math.max(1, Math.ceil(monthlyCostEur / Math.max(avgTicket, 1)));
 

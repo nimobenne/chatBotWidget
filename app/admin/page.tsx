@@ -35,7 +35,7 @@ const defaultBusiness: BusinessConfig = {
   styling: { accentColor: '#22c55e' }
 };
 
-type TabKey = 'businesses' | 'owners' | 'billing' | 'sql' | 'help';
+type TabKey = 'businesses' | 'owners' | 'billing' | 'sql';
 type BusinessHealth = {
   businessId: string;
   servicesConfigured: boolean;
@@ -486,7 +486,6 @@ export default function AdminPage() {
         <button onClick={() => setActiveTab('owners')} style={{ background: activeTab === 'owners' ? '#16a34a' : '#1e293b' }}>Owners</button>
         <button onClick={() => setActiveTab('billing')} style={{ background: activeTab === 'billing' ? '#16a34a' : '#1e293b' }}>Billing</button>
         <button onClick={() => setActiveTab('sql')} style={{ background: activeTab === 'sql' ? '#16a34a' : '#1e293b' }}>SQL Tools</button>
-        <button onClick={() => setActiveTab('help')} style={{ background: activeTab === 'help' ? '#16a34a' : '#1e293b' }}>Help</button>
         <button style={{ marginLeft: 'auto' }} onClick={() => { setAdminToken(''); setPassword(''); }}>Sign Out</button>
       </div>
 
@@ -706,20 +705,6 @@ export default function AdminPage() {
             />
             <button onClick={deleteSessionData}>Delete Session Data</button>
           </div>
-        </section>
-      )}
-
-      {activeTab === 'help' && (
-        <section>
-          <h3>Help and Runbooks</h3>
-          <p>Use these guides when something breaks:</p>
-          <ul>
-            <li><a href="/help">Open Help Center</a></li>
-            <li>Calendar not connecting</li>
-            <li>Booking failed</li>
-            <li>Owner locked out</li>
-            <li>Payment overdue</li>
-          </ul>
         </section>
       )}
 

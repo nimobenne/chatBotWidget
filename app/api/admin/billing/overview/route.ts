@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
           readyToInvoice,
           billing: billing || {
             billing_status: 'trial_unpaid',
-            plan_amount_eur: 50,
+            plan_amount_eur: 39.99,
             setup_fee_eur: 99,
             setup_fee_waived: true,
             trial_booking_threshold: 5,

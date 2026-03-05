@@ -10,7 +10,7 @@ export default function TermsPage() {
       </ul>
       <h3>Billing terms</h3>
       <ul>
-        <li>Current launch offer: €50/month.</li>
+        <li>Current launch offer: €39.99/month.</li>
         <li>Setup fee may be waived by promotion.</li>
         <li>For trial clients, charges begin after agreed booking threshold.</li>
       </ul>

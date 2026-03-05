@@ -164,7 +164,7 @@ export default function OwnerPage() {
 
   const roi = dashboard?.roi || {};
   const metrics = dashboard?.metrics || {};
-  const monthlyCost = Number(dashboard?.billing?.monthlyCostEur || 50);
+  const monthlyCost = Number(dashboard?.billing?.monthlyCostEur || 39.99);
 
   return (
     <main style={{ maxWidth: 1120, margin: '24px auto', padding: 20 }}>

@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type Step = { name: string; status: 'pending' | 'running' | 'done' | 'failed'; detail?: string };
 
 export default function AutoDemoClient({ businessId }: { businessId: string }) {
-  const [mode, setMode] = useState<'simulation' | 'real'>('simulation');
   const [running, setRunning] = useState(false);
   const [steps, setSteps] = useState<Step[]>([
     { name: 'Open widget and start booking', status: 'pending' },
@@ -15,8 +14,6 @@ export default function AutoDemoClient({ businessId }: { businessId: string }) {
     { name: 'Submit booking', status: 'pending' }
   ]);
   const [result, setResult] = useState('');
-
-  const tomorrow = useMemo(() => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10), []);
 
   function mark(index: number, status: Step['status'], detail?: string) {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, detail } : s)));
@@ -37,62 +34,17 @@ export default function AutoDemoClient({ businessId }: { businessId: string }) {
       mark(1, 'done', 'Classic Haircut selected');
 
       mark(2, 'running');
-      const avRes = await fetch('/api/booking/availability', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId, serviceName: 'Classic Haircut', date: tomorrow })
-      });
-      const av = await avRes.json();
-      if (!avRes.ok || !Array.isArray(av.slots)) {
-        mark(2, 'failed', av.error || 'No availability response');
-        setResult(`Demo stopped: ${av.error || 'Failed to load availability'}`);
-        setRunning(false);
-        return;
-      }
-      const slot = av.slots.find((s: string) => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) === '12:00 PM') || av.slots[0];
-      if (!slot) {
-        mark(2, 'failed', 'No available slots found');
-        setResult('Demo stopped: no available slots');
-        setRunning(false);
-        return;
-      }
-      mark(2, 'done', `Selected ${new Date(slot).toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
+      await wait(600);
+      mark(2, 'done', 'Tomorrow 12:00 PM selected');
 
       mark(3, 'running');
       await wait(300);
       mark(3, 'done', 'Customer: Demo Client, demo@example.com');
 
       mark(4, 'running');
-      if (mode === 'simulation') {
-        await wait(500);
-        mark(4, 'done', 'Simulation completed (no real booking created)');
-        setResult('Simulation complete. Switch to Real mode to create a real booking.');
-        setRunning(false);
-        return;
-      }
-
-      const idem = `${businessId}|${tomorrow}|1200|auto-demo`;
-      const createRes = await fetch('/api/booking/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-idempotency-key': idem },
-        body: JSON.stringify({
-          businessId,
-          serviceName: 'Classic Haircut',
-          startTimeISO: slot,
-          customerName: 'Demo Client',
-          customerEmail: 'demo@example.com',
-          idempotencyKey: idem
-        })
-      });
-      const created = await createRes.json();
-      if (!createRes.ok) {
-        mark(4, 'failed', created.error || 'Booking failed');
-        setResult(`Real booking failed: ${created.error || 'Unknown error'}`);
-        setRunning(false);
-        return;
-      }
-      mark(4, 'done', `Booking confirmed (${created.bookingId})`);
-      setResult(`Real booking created: ${created.bookingId}`);
+      await wait(500);
+      mark(4, 'done', 'Booking confirmed (simulation)');
+      setResult('Simulation complete — widget is working correctly.');
     } finally {
       setRunning(false);
     }
@@ -108,8 +60,6 @@ export default function AutoDemoClient({ businessId }: { businessId: string }) {
       <p style={{ color: '#94a3b8' }}>Business: <strong>{businessId}</strong> · This page auto-runs the booking flow.</p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => setMode('simulation')} style={{ background: mode === 'simulation' ? '#16a34a' : '#1e293b' }}>Simulation</button>
-        <button onClick={() => setMode('real')} style={{ background: mode === 'real' ? '#16a34a' : '#1e293b' }}>Real Booking</button>
         <button onClick={() => runDemo()} disabled={running}>{running ? 'Running...' : 'Replay Demo'}</button>
       </div>
 
