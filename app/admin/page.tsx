@@ -35,6 +35,17 @@ const defaultBusiness: BusinessConfig = {
 };
 
 type TabKey = 'businesses' | 'owners' | 'sql';
+type BusinessHealth = {
+  businessId: string;
+  servicesConfigured: boolean;
+  openDays: number;
+  hasAllowedDomains: boolean;
+  calendarConnectedInDb: boolean;
+  calendarUsable: boolean;
+  calendarError: string | null;
+  healthy: boolean;
+  issues: string[];
+};
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
@@ -43,6 +54,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('businesses');
 
   const [businesses, setBusinesses] = useState<BusinessConfig[]>([]);
+  const [businessHealth, setBusinessHealth] = useState<Record<string, BusinessHealth>>({});
   const [owners, setOwners] = useState<any[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -101,6 +113,13 @@ export default function AdminPage() {
     const list = (data.businesses || []) as BusinessConfig[];
     setBusinesses(list);
     setSqlBusinessId((prev) => prev || list[0]?.businessId || '');
+
+    const healthRows = await requestJson('/api/admin/business-health', { headers: adminHeaders() });
+    const map: Record<string, BusinessHealth> = {};
+    for (const row of (healthRows.health || []) as BusinessHealth[]) {
+      map[row.businessId] = row;
+    }
+    setBusinessHealth(map);
 
     const ownerRows = await requestJson('/api/admin/owners', { headers: adminHeaders() });
     setOwners(ownerRows.owners || []);
@@ -405,6 +424,22 @@ export default function AdminPage() {
               <div key={b.businessId} style={{ border: '1px solid #334155', borderRadius: 10, padding: 12, background: '#111827' }}>
                 <div style={{ fontWeight: 700 }}>{b.name}</div>
                 <div style={{ color: '#94a3b8', fontSize: 13 }}>{b.businessId}</div>
+                <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: businessHealth[b.businessId]?.healthy ? '#14532d' : '#7f1d1d' }}>
+                    {businessHealth[b.businessId]?.healthy ? 'Healthy' : 'Needs attention'}
+                  </span>
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: businessHealth[b.businessId]?.calendarUsable ? '#14532d' : '#334155' }}>
+                    Calendar {businessHealth[b.businessId]?.calendarUsable ? 'OK' : businessHealth[b.businessId]?.calendarConnectedInDb ? 'Broken' : 'Missing'}
+                  </span>
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#1e293b' }}>
+                    Open Days: {businessHealth[b.businessId]?.openDays ?? 0}
+                  </span>
+                </div>
+                {businessHealth[b.businessId]?.issues?.length ? (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#fca5a5' }}>
+                    {businessHealth[b.businessId].issues.join(' · ')}
+                  </div>
+                ) : null}
                 <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={() => openEditBusiness(b)}>Edit</button>
                   <button onClick={() => connectGoogleCalendar(b.businessId)}>Connect Calendar</button>
