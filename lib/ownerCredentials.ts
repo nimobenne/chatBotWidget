@@ -12,7 +12,9 @@ function base64UrlDecode(value: string): string {
 }
 
 function tokenSecret(): string {
-  return process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD || 'change-me';
+  const s = process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD;
+  if (!s) throw new Error('OWNER_AUTH_SECRET is not configured');
+  return s;
 }
 
 function sign(payloadB64: string): string {

@@ -108,7 +108,15 @@ export async function POST(req: NextRequest) {
     await clearFailedAttempts(supabase, username);
 
     const token = issueOwnerToken(owner.id);
-    return NextResponse.json({ token, owner: { id: owner.id, username: owner.username } });
+    const res = NextResponse.json({ token, owner: { id: owner.id, username: owner.username } });
+    res.cookies.set('owner_token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/'
+    });
+    return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     return NextResponse.json({ error: message }, { status: 400 });

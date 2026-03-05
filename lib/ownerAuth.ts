@@ -4,8 +4,9 @@ import { getSupabaseServiceClient, verifyOwnerToken } from './ownerCredentials';
 type OwnerUser = { id: string; username?: string | null };
 
 export async function requireOwner(req: NextRequest) {
+  const cookieToken = req.cookies.get('owner_token')?.value || '';
   const authHeader = req.headers.get('authorization') || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const token = cookieToken || (authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '');
   if (!token) throw new Error('Missing bearer token');
 
   const supabase = getSupabaseServiceClient();

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
     if (ownErr) {
       return NextResponse.json({
-        error: `${ownErr.message}. Ensure table business_owners exists.`
+        error: ownErr.message
       }, { status: 400 });
     }
 
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (requestErr) {
-      return NextResponse.json({ error: `${requestErr.message}. Create business_intake_requests table first.` }, { status: 400 });
+      return NextResponse.json({ error: requestErr.message }, { status: 400 });
     }
 
     return NextResponse.json({ intakeRequest: request });

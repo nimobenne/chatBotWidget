@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       action: 'admin_sql_run',
       targetType: 'sql',
       targetId: 'manual',
-      meta: { sqlPreview: parsed.sql.slice(0, 200), rowsAffected: data.rowsAffected ?? null }
+      meta: { rowsAffected: data.rowsAffected ?? null }
     });
 
     return NextResponse.json({ ok: true, result: data });

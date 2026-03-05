@@ -9,6 +9,7 @@ import { verifyWidgetToken } from '@/lib/widgetToken';
 import { getSupabaseServiceClient } from '@/lib/ownerCredentials';
 import { getBookingBlockReason } from '@/lib/billing';
 import { sendAlertEmail } from '@/lib/alerts';
+import { domainAllowed } from '@/lib/domainCheck';
 
 const schema = z.object({
   businessId: z.string().min(1),
@@ -135,14 +136,7 @@ export async function POST(req: NextRequest) {
     const origin = req.headers.get('origin');
     const host = extractOriginHost(req);
     const isSameHost = host && host === req.nextUrl.hostname;
-    const isAllowed = host && business.allowedDomains.some((d) => {
-      const rule = d.toLowerCase().trim();
-      const normalized = host.toLowerCase();
-      if (!rule) return false;
-      if (rule === '*') return true;
-      if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
-      return normalized === rule;
-    });
+    const isAllowed = host && domainAllowed(host, business.allowedDomains);
     if (host && !isSameHost && !isAllowed) {
       ctx.log('warn', 'Origin blocked', { businessId: parsed.businessId, host });
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -239,10 +233,12 @@ export async function POST(req: NextRequest) {
 }
 
 export const OPTIONS = async (req: NextRequest) => {
-  const origin = req.headers.get('origin') || '*';
+  const origin = req.headers.get('origin');
   const res = new NextResponse(null, { status: 204 });
-  res.headers.set('Access-Control-Allow-Origin', origin);
-  res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token, x-idempotency-key');
+  if (origin) {
+    res.headers.set('Access-Control-Allow-Origin', origin);
+    res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token, x-idempotency-key');
+  }
   return res;
 };

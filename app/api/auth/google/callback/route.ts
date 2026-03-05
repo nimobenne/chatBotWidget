@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     }
 
     const [businessId, returnedNonce, source] = state.split(':');
-    if (!businessId || !returnedNonce) {
+    if (!businessId || !returnedNonce || !/^[a-zA-Z0-9_-]+$/.test(businessId)) {
       return NextResponse.redirect(new URL('/admin?error=invalid_state', req.url));
     }
 

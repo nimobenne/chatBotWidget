@@ -4,7 +4,9 @@ import { NextRequest } from 'next/server';
 const ADMIN_TOKEN_TTL_SECONDS = 60 * 60 * 12;
 
 function adminSecret(): string {
-  return process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD || 'change-me';
+  const s = process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD;
+  if (!s) throw new Error('OWNER_AUTH_SECRET is not configured');
+  return s;
 }
 
 export function adminPassword(): string {

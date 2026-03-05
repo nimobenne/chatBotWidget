@@ -12,13 +12,11 @@ type OwnerBusiness = {
   services: { name: string; durationMin: number; priceRange?: string }[];
 };
 
-const TOKEN_KEY = 'owner_portal_token';
-
 export default function OwnerPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [msg, setMsg] = useState('');
-  const [token, setToken] = useState('');
+  const [authed, setAuthed] = useState(false);
   const [businesses, setBusinesses] = useState<OwnerBusiness[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [dashboard, setDashboard] = useState<any>(null);
@@ -29,11 +27,7 @@ export default function OwnerPage() {
   );
 
   useEffect(() => {
-    const savedToken = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) || '' : '';
-    if (savedToken) {
-      setToken(savedToken);
-      loadBusinesses(savedToken);
-    }
+    loadBusinesses();
   }, []);
 
   async function login() {
@@ -48,42 +42,37 @@ export default function OwnerPage() {
       setMsg(friendlyError(data));
       return;
     }
-    const nextToken = data.token || '';
-    setToken(nextToken);
-    localStorage.setItem(TOKEN_KEY, nextToken);
-    await loadBusinesses(nextToken);
+    setAuthed(true);
+    await loadBusinesses();
   }
 
-  function logout() {
-    setToken('');
+  async function logout() {
+    await fetch('/api/owner/auth/logout', { method: 'POST' });
+    setAuthed(false);
     setBusinesses([]);
     setSelectedBusinessId('');
     setDashboard(null);
-    localStorage.removeItem(TOKEN_KEY);
   }
 
-  async function loadBusinesses(authToken: string) {
-    const res = await fetch('/api/owner/businesses', {
-      headers: { Authorization: `Bearer ${authToken}` }
-    });
+  async function loadBusinesses() {
+    const res = await fetch('/api/owner/businesses');
     const data = await res.json();
     if (!res.ok) {
-      if (res.status === 401) logout();
+      if (res.status === 401) { setAuthed(false); return; }
       setMsg(friendlyError(data));
       return;
     }
+    setAuthed(true);
     setBusinesses(data.businesses || []);
     if (data.businesses?.length) {
       const first = data.businesses[0].businessId;
       setSelectedBusinessId(first);
-      loadDashboard(authToken, first);
+      loadDashboard(first);
     }
   }
 
-  async function loadDashboard(authToken: string, businessId: string) {
-    const res = await fetch(`/api/owner/dashboard?businessId=${encodeURIComponent(businessId)}`, {
-      headers: { Authorization: `Bearer ${authToken}` }
-    });
+  async function loadDashboard(businessId: string) {
+    const res = await fetch(`/api/owner/dashboard?businessId=${encodeURIComponent(businessId)}`);
     const data = await res.json();
     if (!res.ok) {
       setMsg(friendlyError(data));
@@ -93,10 +82,8 @@ export default function OwnerPage() {
   }
 
   function connectCalendar() {
-    if (!selectedBusinessId || !token) return;
-    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&mode=url&reconnect=1`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    if (!selectedBusinessId) return;
+    fetch(`/api/auth/google/start?businessId=${encodeURIComponent(selectedBusinessId)}&mode=url&reconnect=1`)
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(friendlyError(data));
@@ -106,10 +93,8 @@ export default function OwnerPage() {
   }
 
   function checkCalendarStatus() {
-    if (!selectedBusinessId || !token) return;
-    fetch(`/api/auth/google/status?businessId=${encodeURIComponent(selectedBusinessId)}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    if (!selectedBusinessId) return;
+    fetch(`/api/auth/google/status?businessId=${encodeURIComponent(selectedBusinessId)}`)
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(friendlyError(data));
@@ -127,11 +112,9 @@ export default function OwnerPage() {
   }
 
   async function exportCsv(type: 'bookings' | 'handoffs') {
-    if (!selectedBusinessId || !token) return;
+    if (!selectedBusinessId) return;
     try {
-      const res = await fetch(`/api/owner/export?type=${type}&businessId=${encodeURIComponent(selectedBusinessId)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`/api/owner/export?type=${type}&businessId=${encodeURIComponent(selectedBusinessId)}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(friendlyError(data));
@@ -151,7 +134,7 @@ export default function OwnerPage() {
     }
   }
 
-  if (!token) {
+  if (!authed) {
     return (
       <main style={{ maxWidth: 520, margin: '80px auto', padding: 20 }}>
         <div style={{ border: '1px solid #334155', borderRadius: 14, background: '#0b1220', padding: 20 }}>
@@ -197,7 +180,7 @@ export default function OwnerPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
           <select value={selectedBusinessId} onChange={(e) => {
             setSelectedBusinessId(e.target.value);
-            loadDashboard(token, e.target.value);
+            loadDashboard(e.target.value);
           }} style={{ minWidth: 320, padding: 8 }}>
             <option value="">Select business</option>
             {businesses.map((b) => (

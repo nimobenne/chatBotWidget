@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStore } from '@/lib/store';
 import { signWidgetToken } from '@/lib/widgetToken';
-import { getRequestContext } from '@/lib/observability';
-
-function domainAllowed(host: string, allowedDomains: string[]): boolean {
-  const normalized = host.toLowerCase();
-  return allowedDomains.some((entry) => {
-    const rule = entry.toLowerCase().trim();
-    if (!rule) return false;
-    if (rule === '*') return true;
-    if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
-    return normalized === rule;
-  });
-}
+import { getRequestContext, extractOriginHost } from '@/lib/observability';
+import { domainAllowed } from '@/lib/domainCheck';
 
 export async function GET(req: NextRequest) {
   const ctx = getRequestContext(req, 'GET /api/widget/config');
@@ -24,7 +14,7 @@ export async function GET(req: NextRequest) {
     if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
 
     const origin = req.headers.get('origin');
-    const host = origin ? new URL(origin).hostname : '';
+    const host = extractOriginHost(req);
     const isSameHost = host && host === req.nextUrl.hostname;
     if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });

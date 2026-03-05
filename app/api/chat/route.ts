@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAssistant, validateChatInput } from '@/lib/ai';
 import { getStore } from '@/lib/store';
-import { getRequestContext } from '@/lib/observability';
+import { getRequestContext, extractOriginHost } from '@/lib/observability';
 import { verifyWidgetToken } from '@/lib/widgetToken';
+import { domainAllowed } from '@/lib/domainCheck';
 
 const rateMap = new Map<string, { count: number; resetAt: number }>();
 // NOTE: In-memory rate limiting doesn't work with multiple server instances.
@@ -10,26 +11,6 @@ const rateMap = new Map<string, { count: number; resetAt: number }>();
 
 function sanitize(text: string): string {
   return text.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 1000);
-}
-
-function extractHost(origin: string | null): string {
-  if (!origin) return '';
-  try {
-    return new URL(origin).hostname;
-  } catch {
-    return '';
-  }
-}
-
-function domainAllowed(host: string, allowedDomains: string[]): boolean {
-  const normalized = host.toLowerCase();
-  return allowedDomains.some((entry) => {
-    const rule = entry.toLowerCase().trim();
-    if (!rule) return false;
-    if (rule === '*') return true;
-    if (rule.startsWith('*.')) return normalized.endsWith(rule.slice(1));
-    return normalized === rule;
-  });
 }
 
 function checkRateLimit(key: string, max = 20, windowMs = 60_000): boolean {
@@ -55,7 +36,7 @@ export async function POST(req: NextRequest) {
     if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
 
     const origin = req.headers.get('origin');
-    const host = extractHost(origin);
+    const host = extractOriginHost(req);
     const isSameHost = host && host === req.nextUrl.hostname;
     if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
       ctx.log('warn', 'Origin blocked', { businessId: parsed.businessId, host });
@@ -96,10 +77,12 @@ export async function POST(req: NextRequest) {
 }
 
 export const OPTIONS = async (req: NextRequest) => {
-  const origin = req.headers.get('origin') || '*';
+  const origin = req.headers.get('origin');
   const res = new NextResponse(null, { status: 204 });
-  res.headers.set('Access-Control-Allow-Origin', origin);
-  res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token');
+  if (origin) {
+    res.headers.set('Access-Control-Allow-Origin', origin);
+    res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token');
+  }
   return res;
 };
