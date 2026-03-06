@@ -45,7 +45,7 @@
     .bubble:hover{transform:scale(1.09);box-shadow:0 8px 28px rgba(0,0,0,.35)}
     .nudge{position:fixed;background:#1e293b;color:#fff;padding:8px 13px;border-radius:999px;font:600 12px/1 -apple-system,sans-serif;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:2147483001;${posBottom ? 'bottom:30px' : 'top:30px'};${posRight ? 'right:88px' : 'left:88px'}}
     .nudge.hidden{display:none}
-    .panel{display:none;width:370px;max-height:610px;background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.22);overflow:hidden;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;margin-bottom:12px}
+    .panel{display:none;width:370px;max-height:610px;background:#fff;color:#1e293b;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.22);overflow:hidden;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;margin-bottom:12px}
     .panel.open{display:flex}
 
     /* Header */
