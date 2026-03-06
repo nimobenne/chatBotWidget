@@ -28,12 +28,13 @@ export async function GET(req: NextRequest) {
     const hasBearer = authHeader.startsWith('Bearer ');
     const bearerToken = hasBearer ? authHeader.slice(7) : '';
     const isAdminBearer = !!bearerToken && verifyAdminToken(bearerToken);
-    if (!hasBearer && !isAdminAuthed(req)) {
+    const ownerCookieToken = req.cookies.get('owner_token')?.value || '';
+    if (!hasBearer && !isAdminAuthed(req) && !ownerCookieToken) {
       ctx.log('warn', 'Google status unauthorized', { reason: 'missing_admin_auth', businessId });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (hasBearer && !isAdminBearer) {
+    if ((hasBearer && !isAdminBearer) || (!hasBearer && !!ownerCookieToken)) {
       const { user, supabase } = await requireOwner(req);
       const { data: ownershipRows, error: ownErr } = await supabase
         .from('business_owners')

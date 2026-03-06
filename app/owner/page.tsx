@@ -178,15 +178,7 @@ export default function OwnerPage() {
 
       <section style={{ marginTop: 14, border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#111827' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-          <select value={selectedBusinessId} onChange={(e) => {
-            setSelectedBusinessId(e.target.value);
-            loadDashboard(e.target.value);
-          }} style={{ minWidth: 320, padding: 8 }}>
-            <option value="">Select business</option>
-            {businesses.map((b) => (
-              <option key={b.businessId} value={b.businessId}>{b.businessId} - {b.name}</option>
-            ))}
-          </select>
+          {selected && <span style={{ fontWeight: 600, color: '#e2e8f0', padding: '8px 0', marginRight: 4 }}>{selected.name}</span>}
           <button onClick={connectCalendar} disabled={!selectedBusinessId}>Connect Calendar</button>
           <button onClick={checkCalendarStatus} disabled={!selectedBusinessId}>Check Calendar Status</button>
           <button onClick={() => exportCsv('bookings')} disabled={!selectedBusinessId}>Export Bookings CSV</button>
