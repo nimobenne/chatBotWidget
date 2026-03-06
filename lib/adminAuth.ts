@@ -4,13 +4,13 @@ import { NextRequest } from 'next/server';
 const ADMIN_TOKEN_TTL_SECONDS = 60 * 60 * 12;
 
 function adminSecret(): string {
-  const s = process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD;
-  if (!s) throw new Error('OWNER_AUTH_SECRET is not configured');
-  return s;
+  return process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD || 'change-me';
 }
 
 export function adminPassword(): string {
-  return process.env.ADMIN_PASSWORD || 'password';
+  const pw = process.env.ADMIN_PASSWORD;
+  if (!pw) throw new Error('ADMIN_PASSWORD environment variable is not set');
+  return pw;
 }
 
 function sign(payloadB64: string): string {

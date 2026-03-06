@@ -38,7 +38,7 @@ export async function sendBookingConfirmation(params: BookingEmailParams) {
 
   try {
     const result = await resend.emails.send({
-      from: 'Bookings <onboarding@resend.dev>',
+      from: process.env.EMAIL_FROM || 'Bookings <onboarding@resend.dev>',
       to: [to],
       subject: `Booking Confirmed - ${serviceName} at ${businessName}`,
       html: `

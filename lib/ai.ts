@@ -142,11 +142,12 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
             end: `${dateStr}T23:59:59`
           });
 
-          const list = slots.length > 0 
-            ? slots.slice(0, 6).map(s => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })).join(', ')
-            : 'No availability';
-
-          assistantText = `Available times for ${serviceName} on ${dateStr}: ${list}`;
+          if (slots.length === 0) {
+            assistantText = `Sorry, there are no available times for ${serviceName} on ${dateStr}. Would you like to try a different date?`;
+          } else {
+            const list = slots.slice(0, 6).map(s => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })).join(', ');
+            assistantText = `Available times for ${serviceName} on ${dateStr}: ${list}. Which time works for you?`;
+          }
         }
 
         if (toolCall.function.name === 'create_booking') {

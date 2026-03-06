@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Script from 'next/script';
 
 import { TestimonialMarquee } from '@/components/blocks/testimonial-marquee';
 import { buttonVariants } from '@/components/ui/button';
@@ -9,6 +10,7 @@ const whatsappHref = 'https://wa.me/31610431511?text=Hi%20WidgetAI%2C%20I%20want
 export default function HomePage() {
   return (
     <>
+    <Script src="/widget.js" data-business="examplebarber" strategy="afterInteractive" />
     <nav className="flex justify-end gap-4 px-5 pt-3 text-xs text-muted-foreground">
       <Link href="/owner" className="hover:text-foreground transition-colors">Owner Portal</Link>
       <Link href="/admin" className="hover:text-foreground transition-colors">Admin</Link>

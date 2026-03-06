@@ -12,9 +12,7 @@ function base64UrlDecode(value: string): string {
 }
 
 function tokenSecret(): string {
-  const s = process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD;
-  if (!s) throw new Error('OWNER_AUTH_SECRET is not configured');
-  return s;
+  return process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD || 'change-me';
 }
 
 function sign(payloadB64: string): string {
@@ -72,7 +70,7 @@ export function verifyOwnerPassword(password: string, stored: string): boolean {
 
 export function getSupabaseServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Supabase credentials are not configured');
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
   return createClient(url, key);
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Script from 'next/script';
 
 type Step = { name: string; status: 'pending' | 'running' | 'done' | 'failed'; detail?: string };
 
@@ -56,6 +57,7 @@ export default function AutoDemoClient({ businessId }: { businessId: string }) {
 
   return (
     <main style={{ maxWidth: 900, margin: '24px auto', padding: 20 }}>
+      <Script src="/widget.js" data-business={businessId} strategy="afterInteractive" />
       <h1 style={{ marginBottom: 8 }}>Auto Demo</h1>
       <p style={{ color: '#94a3b8' }}>Business: <strong>{businessId}</strong> · This page auto-runs the booking flow.</p>
 
