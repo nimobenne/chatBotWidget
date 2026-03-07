@@ -78,11 +78,29 @@ export async function POST(req: NextRequest) {
 
 export const OPTIONS = async (req: NextRequest) => {
   const origin = req.headers.get('origin');
-  const res = new NextResponse(null, { status: 204 });
-  if (origin) {
-    res.headers.set('Access-Control-Allow-Origin', origin);
-    res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token');
+  const host   = extractOriginHost(req);
+  const res    = new NextResponse(null, { status: 204 });
+  res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token');
+  if (origin && host) {
+    const isSameHost = host === req.nextUrl.hostname;
+    if (isSameHost) {
+      res.headers.set('Access-Control-Allow-Origin', origin);
+      res.headers.set('Vary', 'Origin');
+    } else {
+      // Validate the requesting domain against the business's allowed list using the
+      // bid query param (widget appends ?bid=<businessId> to every request URL so
+      // the preflight goes to the same URL and we can look up the allowlist here).
+      const bid = req.nextUrl.searchParams.get('bid') || '';
+      if (bid) {
+        const store    = getStore();
+        const business = await store.getBusinessConfig(bid).catch(() => null);
+        if (business && domainAllowed(host, business.allowedDomains)) {
+          res.headers.set('Access-Control-Allow-Origin', origin);
+          res.headers.set('Vary', 'Origin');
+        }
+      }
+    }
   }
   return res;
 };

@@ -5,6 +5,9 @@ import { getCalendarBusyRanges } from './calendar';
 import { sendAlertEmail } from './alerts';
 import { getBookingBlockReason } from './billing';
 
+const SLOT_INTERVAL_MIN = 30; // minutes between available slot candidates
+const MAX_SLOTS_RETURNED = 20; // cap on slots returned per availability query
+
 function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -86,8 +89,7 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
 
     const open = zonedLocalToUtc(dayYmd, rule.open, business.timezone);
     const close = zonedLocalToUtc(dayYmd, rule.close, business.timezone);
-    const step = 30;
-    for (let cursor = new Date(open); cursor < close; cursor.setMinutes(cursor.getMinutes() + step)) {
+    for (let cursor = new Date(open); cursor < close; cursor.setMinutes(cursor.getMinutes() + SLOT_INTERVAL_MIN)) {
       const start = new Date(cursor);
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + service.durationMin + (service.bufferMin ?? 0));
@@ -100,7 +102,7 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
     dayYmd = addDaysYmd(dayYmd, 1);
   }
 
-  return slots.slice(0, 20);
+  return slots.slice(0, MAX_SLOTS_RETURNED);
 }
 
 export async function createBookingRecord(params: {
@@ -124,7 +126,25 @@ export async function createBookingRecord(params: {
   if (params.status === 'confirmed') {
     const calendarConn = await store.getGoogleCalendarConnection(params.business.businessId);
     if (!calendarConn) {
-      throw new Error('Online booking is unavailable right now. Please call the business to book by phone.');
+      // No calendar connected — save the booking and alert the owner to add it manually.
+      const booking = await store.createBooking({
+        businessId: params.business.businessId,
+        serviceName: params.serviceName,
+        startTimeISO: start.toISOString(),
+        endTimeISO: end.toISOString(),
+        customerName: params.customerName,
+        customerPhone: params.customerPhone || params.customerEmail || '',
+        customerEmail: params.customerEmail,
+        status: 'requested',
+        notes: params.notes
+      });
+      await sendAlertEmail({
+        severity: 'warning',
+        title: 'New booking — no calendar connected',
+        message: `${params.customerName} booked ${params.serviceName} for ${start.toISOString()}. No Google Calendar is connected; add this manually.`,
+        context: { businessId: params.business.businessId, bookingId: booking.bookingId }
+      }).catch(() => null);
+      return booking;
     }
 
     const existing = await store.listBookings(params.business.businessId);
@@ -161,22 +181,26 @@ export async function createBookingRecord(params: {
   if (params.status === 'confirmed') {
     try {
       const calendarResult = await createCalendarEvent(booking, params.business);
-      if (!calendarResult?.eventId) {
-        await store.deleteBooking(booking.bookingId).catch(() => null);
-        throw new Error('Calendar event was not created. Please try again.');
+      if (calendarResult?.eventId) {
+        await store.updateBookingCalendarEvent(booking.bookingId, calendarResult.eventId).catch(() => null);
+      } else {
+        // Calendar API returned no event ID — booking is saved, alert owner to add manually.
+        await sendAlertEmail({
+          severity: 'warning',
+          title: 'Booking saved — calendar event missing',
+          message: `Booking ${booking.bookingId} for ${params.serviceName} was saved but the Google Calendar event was not created. Please add it manually.`,
+          context: { businessId: params.business.businessId, bookingId: booking.bookingId }
+        }).catch(() => null);
       }
-      await store.updateBookingCalendarEvent(booking.bookingId, calendarResult.eventId).catch(() => null);
-      console.log('Calendar event created:', calendarResult.htmlLink);
     } catch (error) {
-      await store.deleteBooking(booking.bookingId).catch(() => null);
+      // Calendar API error — keep the booking, alert owner instead of failing the customer.
       console.error('Failed to create calendar event:', error);
       await sendAlertEmail({
-        severity: 'error',
-        title: 'Calendar event creation failed',
-        message: error instanceof Error ? error.message : 'Unknown calendar error',
+        severity: 'warning',
+        title: 'Booking saved — calendar sync failed',
+        message: `${params.customerName} booked ${params.serviceName} for ${start.toISOString()} but the calendar event failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please add it manually.`,
         context: { businessId: params.business.businessId, bookingId: booking.bookingId, serviceName: params.serviceName }
-      });
-      throw new Error('Unable to confirm booking in calendar. Please try again or call the business.');
+      }).catch(() => null);
     }
   }
 

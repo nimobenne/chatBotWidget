@@ -10,13 +10,17 @@ import { getSupabaseServiceClient } from '@/lib/ownerCredentials';
 import { getBookingBlockReason } from '@/lib/billing';
 import { sendAlertEmail } from '@/lib/alerts';
 
+function sanitizeText(s: string): string {
+  return s.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+}
+
 const schema = z.object({
-  businessId: z.string().min(1),
-  serviceName: z.string().min(1),
+  businessId: z.string().min(1).max(100),
+  serviceName: z.string().min(1).max(200).transform(sanitizeText),
   startTimeISO: z.string().datetime(),
-  customerName: z.string().min(1),
-  customerEmail: z.string().email(),
-  customerPhone: z.string().optional(),
+  customerName: z.string().min(1).max(200).transform(sanitizeText),
+  customerEmail: z.string().email().max(300),
+  customerPhone: z.string().max(30).optional().transform(v => v ? sanitizeText(v) : v),
   idempotencyKey: z.string().min(8).max(200).optional()
 });
 
@@ -243,10 +247,35 @@ export async function POST(req: NextRequest) {
 }
 
 export const OPTIONS = async (req: NextRequest) => {
-  const origin = req.headers.get('origin') || '*';
-  const res = new NextResponse(null, { status: 204 });
-  res.headers.set('Access-Control-Allow-Origin', origin);
+  const origin = req.headers.get('origin');
+  const host   = extractOriginHost(req);
+  const res    = new NextResponse(null, { status: 204 });
   res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type, x-widget-token, x-idempotency-key');
+  if (origin && host) {
+    const isSameHost = host === req.nextUrl.hostname;
+    if (isSameHost) {
+      res.headers.set('Access-Control-Allow-Origin', origin);
+      res.headers.set('Vary', 'Origin');
+    } else {
+      const bid = req.nextUrl.searchParams.get('bid') || '';
+      if (bid) {
+        const store    = getStore();
+        const business = await store.getBusinessConfig(bid).catch(() => null);
+        const allowed  = business ? business.allowedDomains.some((d) => {
+          const rule = d.toLowerCase().trim();
+          const h    = host.toLowerCase();
+          if (!rule) return false;
+          if (rule === '*') return true;
+          if (rule.startsWith('*.')) return h.endsWith(rule.slice(1));
+          return h === rule;
+        }) : false;
+        if (allowed) {
+          res.headers.set('Access-Control-Allow-Origin', origin);
+          res.headers.set('Vary', 'Origin');
+        }
+      }
+    }
+  }
   return res;
 };

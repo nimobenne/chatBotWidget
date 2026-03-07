@@ -15,9 +15,18 @@
   const launcherIcon = (iconAttr && iconAttr !== 'scissors') ? iconAttr : SCISSORS_SVG;
   const avatarIcon   = (iconAttr && iconAttr !== 'scissors') ? iconAttr : AVATAR_SVG;
 
-  const sessionKey = `ai_receptionist_session_${businessId}`;
-  const sessionId  = localStorage.getItem(sessionKey) || crypto.randomUUID();
-  localStorage.setItem(sessionKey, sessionId);
+  const sessionKey   = `ai_receptionist_session_${businessId}`;
+  const SESSION_TTL  = 24 * 60 * 60 * 1000; // sessions expire after 24 hours
+  function getOrCreateSession() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(sessionKey) || 'null');
+      if (stored && stored.id && (Date.now() - stored.createdAt) < SESSION_TTL) return stored.id;
+    } catch { /* corrupted storage */ }
+    const id = crypto.randomUUID();
+    localStorage.setItem(sessionKey, JSON.stringify({ id, createdAt: Date.now() }));
+    return id;
+  }
+  const sessionId = getOrCreateSession();
 
   let widgetConfig = {
     name: 'Book an Appointment',
@@ -375,7 +384,7 @@
       (booking.customerName || '').toLowerCase().trim(), (booking.customerEmail || '').toLowerCase().trim()].join('|').slice(0, 190);
     const body = { businessId, serviceName: booking.serviceName, startTimeISO: booking.selectedSlotISO, customerName: booking.customerName, customerEmail: booking.customerEmail, idempotencyKey: key };
     if (booking.customerPhone) body.customerPhone = booking.customerPhone;
-    const r = await fetch(`${apiBase}/api/booking/create`, {
+    const r = await fetch(`${apiBase}/api/booking/create?bid=${encodeURIComponent(businessId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken, 'x-idempotency-key': key },
       body: JSON.stringify(body)
@@ -815,7 +824,7 @@
     addMsg(msg, 'u');
     showTyping();
     try {
-      const r    = await fetch(`${apiBase}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken }, body: JSON.stringify({ businessId, sessionId, message: msg }) });
+      const r    = await fetch(`${apiBase}/api/chat?bid=${encodeURIComponent(businessId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken }, body: JSON.stringify({ businessId, sessionId, message: msg }) });
       const data = await r.json();
       hideTyping();
       addMsg(data.error || data.message || 'How can I help?', 'a');

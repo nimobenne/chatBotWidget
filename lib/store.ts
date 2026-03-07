@@ -118,11 +118,11 @@ class JsonDataStore implements DataStore {
     await writeJson(CONVERSATIONS_PATH, filtered);
   }
 
-  async getGoogleCalendarConnection(businessId: string): Promise<GoogleCalendarConnection | null> {
+  async getGoogleCalendarConnection(_businessId: string): Promise<GoogleCalendarConnection | null> {
     return null;
   }
 
-  async saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void> {
+  async saveGoogleCalendarConnection(_conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void> {
     // Not implemented for JSON store
   }
 
@@ -168,23 +168,8 @@ interface SupabaseBooking {
   created_at: string;
 }
 
-interface SupabaseHandoff {
-  id: string;
-  business_id: string;
-  customer_contact: { phone?: string; email?: string };
-  summary: string;
-  created_at: string;
-  resolved_at: string | null;
-  channel: string;
-  status: string;
-  last_user_message: string;
-}
-
-interface SupabaseConversation {
-  id: string;
-  business_id: string;
+interface SupabaseConversationRow {
   session_id: string;
-  messages: { role: string; content: string }[];
   last_user_message: string;
   last_assistant_message: string;
   created_at: string;
@@ -216,6 +201,11 @@ function toBusinessConfig(sb: SupabaseBusiness): BusinessConfig {
     styling: sb.widget_style
   };
 }
+
+// Module-level cache shared across calls within the same serverless instance.
+// Prevents N+1 config queries on every chat turn. TTL keeps config fresh after owner edits.
+const BUSINESS_CONFIG_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const businessConfigCache = new Map<string, { config: BusinessConfig; expiresAt: number }>();
 
 class SupabaseDataStore implements DataStore {
   private client;
@@ -251,13 +241,18 @@ class SupabaseDataStore implements DataStore {
   }
 
   async getBusinessConfig(businessId: string): Promise<BusinessConfig | null> {
+    const cached = businessConfigCache.get(businessId);
+    if (cached && Date.now() < cached.expiresAt) return cached.config;
+
     const { data, error } = await this.client
       .from('businesses')
       .select('*')
       .eq('slug', businessId)
       .single();
     if (error) return null;
-    return toBusinessConfig(data as SupabaseBusiness);
+    const config = toBusinessConfig(data as SupabaseBusiness);
+    businessConfigCache.set(businessId, { config, expiresAt: Date.now() + BUSINESS_CONFIG_TTL_MS });
+    return config;
   }
 
   async saveBusinessConfig(business: BusinessConfig): Promise<void> {
@@ -387,10 +382,6 @@ class SupabaseDataStore implements DataStore {
     const { error } = await this.client.from('conversations').insert({
       business_id: businessDbId,
       session_id: log.sessionId,
-      messages: [
-        { role: 'user', content: log.userMessage },
-        { role: 'assistant', content: log.assistantMessage }
-      ],
       last_user_message: log.userMessage,
       last_assistant_message: log.assistantMessage,
       created_at: now,
@@ -414,7 +405,7 @@ class SupabaseDataStore implements DataStore {
     
     if (error || !data) return [];
     
-    return data.map((c: any) => ({
+    return (data as SupabaseConversationRow[]).map((c) => ({
       businessId,
       sessionId: c.session_id,
       userMessage: c.last_user_message,

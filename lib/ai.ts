@@ -4,6 +4,9 @@ import { getStore } from './store';
 import { getAvailableSlots, createBookingRecord } from './booking';
 import { sendBookingConfirmation } from './email';
 
+const CONVERSATION_HISTORY_LIMIT = 8;   // turns of context sent to OpenAI
+const OPENAI_TIMEOUT_MS          = 30_000; // abort if OpenAI takes longer than this
+
 const inputSchema = z.object({
   businessId: z.string().min(1),
   sessionId: z.string().min(1),
@@ -22,11 +25,23 @@ const BLOCKED_PATTERNS = [
 ];
 
 function isOffTopic(message: string): boolean {
-  const lower = message.toLowerCase();
-  // Block prompt injection attempts
+  // Block prompt injection attempts first
   if (BLOCKED_PATTERNS.some(p => p.test(message))) return true;
-  // Block messages that are clearly nothing to do with a barbershop
-  const barbershopTerms = ['book', 'appoint', 'haircut', 'cut', 'fade', 'beard', 'trim', 'shave', 'price', 'cost', 'hour', 'open', 'close', 'availab', 'time', 'date', 'cancel', 'reschedul', 'service', 'walk', 'wait', 'how long', 'address', 'location', 'phone', 'contact', 'hello', 'hi', 'hey', 'thanks', 'thank', 'help'];
+  // Short follow-ups like "yes", "ok", "sure", "no", "1", "2pm" should never be blocked
+  if (message.trim().length <= 10) return false;
+  const lower = message.toLowerCase();
+  // Allow anything plausibly related to a barbershop booking
+  const barbershopTerms = [
+    'book', 'appoint', 'haircut', 'cut', 'fade', 'beard', 'trim', 'shave',
+    'price', 'cost', 'rate', 'fee', 'charge', 'discount', 'deal', 'promo',
+    'hour', 'open', 'close', 'availab', 'time', 'date', 'slot',
+    'cancel', 'reschedul', 'refund', 'policy', 'service', 'walk', 'wait',
+    'how long', 'address', 'location', 'direction', 'parking',
+    'phone', 'contact', 'call', 'text',
+    'hello', 'hi', 'hey', 'thanks', 'thank', 'help', 'need', 'want', 'would like',
+    'barber', 'stylist', 'staff', 'today', 'tomorrow', 'weekend', 'monday',
+    'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+  ];
   return !barbershopTerms.some(t => lower.includes(t));
 }
 
@@ -133,21 +148,20 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
     }
 
     // Get conversation history
-    const history = await store.getConversationHistory(input.businessId, input.sessionId, 8);
-    
-    const historyText = history.length > 0 
-      ? history.map(h => `User: ${h.userMessage}\nAssistant: ${h.assistantMessage}`).join('\n\n')
-      : '';
+    const history = await store.getConversationHistory(input.businessId, input.sessionId, CONVERSATION_HISTORY_LIMIT);
 
     const response = await client.chat.completions.create({
       model: 'gpt-4o',
       tools,
       messages: [
         { role: 'system' as const, content: getSystemPrompt(business) },
-        ...(historyText ? [{ role: 'user' as const, content: `Previous conversation:\n${historyText}` }] : []),
+        ...history.flatMap(h => [
+          { role: 'user' as const,      content: h.userMessage      },
+          { role: 'assistant' as const, content: h.assistantMessage }
+        ]),
         { role: 'user' as const, content: input.message }
       ]
-    });
+    }, { signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS) });
 
     let assistantText = '';
     const message = response.choices[0]?.message;
