@@ -78,6 +78,8 @@ export default function AdminPage() {
   const [runningSql, setRunningSql] = useState(false);
   const [sqlResult, setSqlResult] = useState('');
   const [privacyForm, setPrivacyForm] = useState({ businessId: '', sessionId: '' });
+  const [embedOpen, setEmbedOpen] = useState<Record<string, boolean>>({});
+  const [widgetLive, setWidgetLive] = useState<Record<string, { checking: boolean; live?: boolean; checkedUrl?: string; error?: string }>>({});
 
   const selectedForSql = useMemo(
     () => businesses.find((b) => b.businessId === sqlBusinessId) || defaultBusiness,
@@ -92,6 +94,22 @@ export default function AdminPage() {
     const bookings30d = billingClients.reduce((sum, c) => sum + Number(c.confirmedBookings30d || 0), 0);
     return { totalBusinesses, activePaid, readyToInvoice, overdue, bookings30d };
   }, [billingClients]);
+
+  function buildAdminSnippet(b: BusinessConfig) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const accent = b.styling?.accentColor || '#10B981';
+    return `<script\n  src="${origin}/widget.js"\n  data-business="${b.businessId}"\n  data-accent="${accent}"\n  data-position="bottom-right"\n  data-greeting="Hi! Ready to book your next cut?"\n></script>`;
+  }
+
+  async function checkWidgetLive(businessId: string) {
+    setWidgetLive((prev) => ({ ...prev, [businessId]: { checking: true } }));
+    try {
+      const data = await requestJson(`/api/admin/widget-status?businessId=${encodeURIComponent(businessId)}`, { headers: adminHeaders() });
+      setWidgetLive((prev) => ({ ...prev, [businessId]: { checking: false, ...data } }));
+    } catch (e: any) {
+      setWidgetLive((prev) => ({ ...prev, [businessId]: { checking: false, error: e.message || 'Failed' } }));
+    }
+  }
 
   function adminHeaders(includeJson = false) {
     return {
@@ -503,11 +521,20 @@ export default function AdminPage() {
             <h3 style={{ margin: 0 }}>Businesses</h3>
             <button onClick={openNewBusiness}>+ Add New Business</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 10 }}>
             {businesses.map((b) => (
               <div key={b.businessId} style={{ border: '1px solid #334155', borderRadius: 10, padding: 12, background: '#111827' }}>
-                <div style={{ fontWeight: 700 }}>{b.name}</div>
-                <div style={{ color: '#94a3b8', fontSize: 13 }}>{b.businessId}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{b.name}</div>
+                    <div style={{ color: '#94a3b8', fontSize: 13 }}>{b.businessId}</div>
+                  </div>
+                  {widgetLive[b.businessId] && !widgetLive[b.businessId].checking && (
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: widgetLive[b.businessId].error ? '#78350f' : widgetLive[b.businessId].live ? '#14532d' : '#7f1d1d' }}>
+                      {widgetLive[b.businessId].error ? '⚠️ Unreachable' : widgetLive[b.businessId].live ? '✅ Live' : '❌ Not found'}
+                    </span>
+                  )}
+                </div>
                 <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: businessHealth[b.businessId]?.healthy ? '#14532d' : '#7f1d1d' }}>
                     {businessHealth[b.businessId]?.healthy ? 'Healthy' : 'Needs attention'}
@@ -530,8 +557,27 @@ export default function AdminPage() {
                   <button onClick={() => checkCalendarStatus(b.businessId)}>Check Status</button>
                   <button onClick={() => exportCsv('bookings', b.businessId)}>Export Bookings</button>
                   <button onClick={() => exportCsv('handoffs', b.businessId)}>Export Handoffs</button>
+                  <button onClick={() => setEmbedOpen((prev) => ({ ...prev, [b.businessId]: !prev[b.businessId] }))}>
+                    {embedOpen[b.businessId] ? 'Hide Embed' : 'Embed Code'}
+                  </button>
+                  <button onClick={() => checkWidgetLive(b.businessId)} disabled={widgetLive[b.businessId]?.checking}>
+                    {widgetLive[b.businessId]?.checking ? 'Checking...' : 'Check Live'}
+                  </button>
                   <button onClick={() => { setDeleteTarget(b.businessId); setDeleteConfirmSlug(''); }}>Delete</button>
                 </div>
+                {embedOpen[b.businessId] && (
+                  <div style={{ marginTop: 10 }}>
+                    <pre style={{ background: '#020617', color: '#93c5fd', padding: 10, borderRadius: 6, fontSize: 11, overflowX: 'auto', margin: 0, whiteSpace: 'pre' }}>
+                      {buildAdminSnippet(b)}
+                    </pre>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(buildAdminSnippet(b)).then(() => setMessage('Snippet copied!')).catch(() => {})}
+                      style={{ marginTop: 6, fontSize: 12 }}
+                    >
+                      Copy Snippet
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

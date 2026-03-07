@@ -135,7 +135,13 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
   ] : [];
 
   try {
-    if (isOffTopic(input.message)) {
+    // Fetch history first so we can skip the topic filter for ongoing conversations.
+    // A customer mid-booking shouldn't get blocked for saying "what can I do?" or similar.
+    const history = await store.getConversationHistory(input.businessId, input.sessionId, CONVERSATION_HISTORY_LIMIT);
+
+    // Only apply the topic guard on the very first message of a fresh session.
+    // Injection-pattern checks always run regardless.
+    if (history.length === 0 && isOffTopic(input.message)) {
       const refusal = `I can only help with bookings and questions about ${business.name}. Would you like to book an appointment?`;
       await store.logConversation({
         businessId: input.businessId,
@@ -146,9 +152,6 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
       });
       return { message: refusal };
     }
-
-    // Get conversation history
-    const history = await store.getConversationHistory(input.businessId, input.sessionId, CONVERSATION_HISTORY_LIMIT);
 
     const response = await client.chat.completions.create({
       model: 'gpt-4o',

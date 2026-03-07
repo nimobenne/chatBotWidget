@@ -10,6 +10,8 @@ type OwnerBusiness = {
   bookingMode: 'calendar';
   contact: { phone: string; email?: string; address?: string };
   services: { name: string; durationMin: number; priceRange?: string }[];
+  allowedDomains?: string[];
+  styling?: { accentColor?: string };
 };
 
 export default function OwnerPage() {
@@ -20,6 +22,11 @@ export default function OwnerPage() {
   const [businesses, setBusinesses] = useState<OwnerBusiness[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [dashboard, setDashboard] = useState<any>(null);
+  const [snippetPosition, setSnippetPosition] = useState('bottom-right');
+  const [snippetAccent, setSnippetAccent] = useState('#10B981');
+  const [snippetGreeting, setSnippetGreeting] = useState("Hi! Ready to book your next cut?");
+  const [snippetCopied, setSnippetCopied] = useState(false);
+  const [domainLiveStatus, setDomainLiveStatus] = useState<Record<string, { checking: boolean; live?: boolean; checkedUrl?: string; foundScript?: string | null; error?: string }>>({});
 
   const selected = useMemo(
     () => businesses.find((b) => b.businessId === selectedBusinessId) || null,
@@ -134,6 +141,11 @@ export default function OwnerPage() {
     }
   }
 
+  function buildSnippet(businessId: string, accent: string, position: string, greeting: string) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `<script\n  src="${origin}/widget.js"\n  data-business="${businessId}"\n  data-accent="${accent}"\n  data-position="${position}"\n  data-greeting="${greeting}"\n></script>`;
+  }
+
   if (!authed) {
     return (
       <main style={{ maxWidth: 520, margin: '80px auto', padding: 20 }}>
@@ -243,6 +255,98 @@ export default function OwnerPage() {
           </div>
         ) : (
           <p style={{ marginBottom: 0, color: '#94a3b8' }}>No booking data yet.</p>
+        )}
+      </section>
+
+      <section style={{ marginTop: 12, border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#0b1220' }}>
+        <h3 style={{ marginTop: 0 }}>Installation</h3>
+        <p style={{ color: '#94a3b8', marginTop: 0, marginBottom: 12 }}>
+          Add this snippet to your website&apos;s &lt;head&gt; or just before &lt;/body&gt;.
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Position:
+            <select value={snippetPosition} onChange={(e) => setSnippetPosition(e.target.value)}>
+              <option value="bottom-right">Bottom Right</option>
+              <option value="bottom-left">Bottom Left</option>
+              <option value="top-right">Top Right</option>
+              <option value="top-left">Top Left</option>
+            </select>
+          </label>
+          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Accent:
+            <input
+              type="color"
+              value={snippetAccent}
+              onChange={(e) => setSnippetAccent(e.target.value)}
+              style={{ width: 40, height: 28, padding: 2, cursor: 'pointer' }}
+            />
+          </label>
+          <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 220 }}>
+            Greeting:
+            <input
+              value={snippetGreeting}
+              onChange={(e) => setSnippetGreeting(e.target.value)}
+              style={{ flex: 1 }}
+            />
+          </label>
+        </div>
+        {selected ? (
+          <>
+            <pre style={{ background: '#020617', color: '#93c5fd', padding: 12, borderRadius: 8, fontSize: 12, overflowX: 'auto', margin: 0, whiteSpace: 'pre' }}>
+              {buildSnippet(selected.businessId, snippetAccent, snippetPosition, snippetGreeting)}
+            </pre>
+            <button
+              onClick={() => {
+                navigator.clipboard
+                  .writeText(buildSnippet(selected.businessId, snippetAccent, snippetPosition, snippetGreeting))
+                  .then(() => { setSnippetCopied(true); setTimeout(() => setSnippetCopied(false), 2000); })
+                  .catch(() => {});
+              }}
+              style={{ marginTop: 8 }}
+            >
+              {snippetCopied ? 'Copied!' : 'Copy to Clipboard'}
+            </button>
+            {(selected.allowedDomains || []).filter((d) => d && d !== '*' && !d.includes('localhost') && !d.includes('127.0.0.1')).length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Live status by domain:</div>
+                {(selected.allowedDomains || [])
+                  .filter((d) => d && d !== '*' && !d.includes('localhost') && !d.includes('127.0.0.1'))
+                  .map((domain) => {
+                    const st = domainLiveStatus[domain];
+                    return (
+                      <div key={domain} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, color: '#cbd5e1', minWidth: 180 }}>{domain}</span>
+                        <button
+                          disabled={st?.checking}
+                          onClick={async () => {
+                            setDomainLiveStatus((prev) => ({ ...prev, [domain]: { checking: true } }));
+                            try {
+                              const res = await fetch(
+                                `/api/owner/widget-status?businessId=${encodeURIComponent(selected.businessId)}&url=${encodeURIComponent(`https://${domain}`)}`
+                              );
+                              const data = await res.json();
+                              setDomainLiveStatus((prev) => ({ ...prev, [domain]: { checking: false, ...data } }));
+                            } catch {
+                              setDomainLiveStatus((prev) => ({ ...prev, [domain]: { checking: false, error: 'Request failed' } }));
+                            }
+                          }}
+                        >
+                          {st?.checking ? 'Checking...' : 'Check Live'}
+                        </button>
+                        {st && !st.checking && (
+                          <span style={{ fontSize: 12, color: st.error ? '#fbbf24' : st.live ? '#86efac' : '#fca5a5' }}>
+                            {st.error ? `⚠️ ${st.error}` : st.live ? '✅ Widget detected' : '❌ Not found'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </>
+        ) : (
+          <p style={{ color: '#64748b', margin: 0 }}>Select a business to see the snippet.</p>
         )}
       </section>
 
