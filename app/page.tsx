@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Script from 'next/script';
 import { useState } from 'react';
 
 import { TestimonialMarquee } from '@/components/blocks/testimonial-marquee';
@@ -52,31 +51,18 @@ export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   function launchDemo() {
-    if (!demoLoaded) {
-      setDemoLoaded(true);
-      return;
-    }
-    const host = document.querySelector('div[data-widget-demo]');
-    if (host && host.shadowRoot) {
-      const bubble = host.shadowRoot.querySelector('.bubble') as HTMLElement | null;
-      bubble?.click();
-    }
+    if (demoLoaded) return;
+    setDemoLoaded(true);
+    const s = document.createElement('script');
+    s.src = '/widget.js';
+    s.setAttribute('data-business', 'examplebarber');
+    s.setAttribute('data-demo', 'true');
+    s.setAttribute('data-position', 'bottom-right');
+    document.body.appendChild(s);
   }
 
   return (
     <>
-      <Script src="/widget.js" data-business="examplebarber" strategy="afterInteractive" />
-
-      {demoLoaded && (
-        <Script
-          src="/widget.js"
-          data-business="examplebarber"
-          data-demo="true"
-          data-position="bottom-right"
-          strategy="afterInteractive"
-          onLoad={() => {}}
-        />
-      )}
 
       <nav className="flex items-center justify-between px-5 pt-3 text-xs text-muted-foreground">
         <a href={siteUrl} className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
