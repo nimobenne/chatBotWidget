@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { getStore } from './store';
 import { getAvailableSlots, createBookingRecord } from './booking';
-import { sendBookingConfirmation } from './email';
+import { sendBookingConfirmation, sendOwnerBookingNotification } from './email';
+import { sendAlertEmail } from './alerts';
 
 const CONVERSATION_HISTORY_LIMIT = 8;   // turns of context sent to OpenAI
 const OPENAI_TIMEOUT_MS          = 30_000; // abort if OpenAI takes longer than this
@@ -82,8 +83,9 @@ BOOKING FLOW — follow this order and remember every answer:
 5. Confirm and book
 
 CANCELLATIONS AND RESCHEDULING:
-- You cannot cancel or reschedule bookings online. Tell the customer: "To cancel or reschedule, please call us at ${business.contact.phone} and we'll sort it out right away."
-- Do NOT ask for name/email to "look up" a cancellation — you have no way to cancel it yourself.
+- If a customer wants to cancel or reschedule, ask for their name and use the request_cancellation tool to forward the request to the business owner.
+- After forwarding, tell the customer: "I've sent your request to ${business.name}. They'll confirm with you shortly. You can also call ${business.contact.phone} directly."
+- Do NOT ask for email to look up a booking — just get their name and reason, then forward it.
 
 BUSINESS INFO:
 - Services:
@@ -143,6 +145,21 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
           }
         }
       }
+    {
+      type: 'function' as const,
+      function: {
+        name: 'request_cancellation',
+        description: 'Forward a cancellation or rescheduling request from the customer to the business owner',
+        parameters: {
+          type: 'object',
+          properties: {
+            customerName: { type: 'string', description: 'Name of the customer requesting cancellation' },
+            reason: { type: 'string', description: 'Reason for cancellation or rescheduling (optional)' }
+          },
+          required: ['customerName']
+        }
+      }
+    }
   ] : [];
 
   try {
@@ -217,16 +234,20 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
             continue;
           }
 
-          const slots = await getAvailableSlots(business, serviceName, {
-            start: `${dateStr}T00:00:00`,
-            end: `${dateStr}T23:59:59`
-          });
+          try {
+            const slots = await getAvailableSlots(business, serviceName, {
+              start: `${dateStr}T00:00:00`,
+              end: `${dateStr}T23:59:59`
+            });
 
-          if (slots.length === 0) {
-            assistantText = `Sorry, there are no available times for ${serviceName} on ${dateStr}. Would you like to try a different date?`;
-          } else {
-            const list = slots.slice(0, 6).map(s => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })).join(', ');
-            assistantText = `Available times for ${serviceName} on ${dateStr}: ${list}. Which time works for you?`;
+            if (slots.length === 0) {
+              assistantText = `Sorry, there are no available times for ${serviceName} on ${dateStr}. Would you like to try a different date?`;
+            } else {
+              const list = slots.slice(0, 6).map(s => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })).join(', ');
+              assistantText = `Available times for ${serviceName} on ${dateStr}: ${list}. Which time works for you?`;
+            }
+          } catch {
+            assistantText = `I'm having trouble checking availability right now. Please try again in a moment, or call ${business.contact.phone} to book.`;
           }
         }
 
@@ -275,11 +296,36 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
               businessPhone: business.contact.phone
             }).catch(() => {});
 
+            await sendOwnerBookingNotification({
+              ownerEmail: business.contact.email,
+              customerName,
+              serviceName,
+              dateTime: dt,
+              businessName: business.name,
+              customerEmail,
+              customerPhone: args.customerPhone
+            }).catch(() => {});
+
             const fmt = new Date(dt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
             assistantText = `✅ Booked! ${customerName} - ${serviceName} on ${fmt}. Confirmation sent to ${customerEmail}`;
           } catch (err) {
             assistantText = `Sorry, that time isn't available. Try another time, or call ${business.contact.phone} and we can book by phone.`;
           }
+        }
+
+        if (toolCall.function.name === 'request_cancellation') {
+          const args = parseArgs(toolCall.function.arguments);
+          const customerName = String(args.customerName || '').trim();
+          const reason = String(args.reason || 'no reason provided').trim();
+
+          await sendAlertEmail({
+            severity: 'warning',
+            title: `Cancellation request — ${customerName}`,
+            message: `${customerName} has requested to cancel or reschedule. Reason: ${reason}. Please follow up by phone.`,
+            context: { businessId: business.businessId }
+          }).catch(() => null);
+
+          assistantText = `I've forwarded your request to ${business.name}. They'll be in touch to confirm. You can also call ${business.contact.phone} directly if you need to reach them sooner.`;
         }
       }
     }

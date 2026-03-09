@@ -75,7 +75,12 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
   const endYmd = String(dateRangeISO.end).slice(0, 10);
   const calendarRangeStart = zonedLocalToUtc(startYmd, '00:00', business.timezone).toISOString();
   const calendarRangeEnd = zonedLocalToUtc(endYmd, '23:59', business.timezone).toISOString();
-  const busyInCalendar = await getCalendarBusyRanges(business, calendarRangeStart, calendarRangeEnd);
+  let busyInCalendar: Awaited<ReturnType<typeof getCalendarBusyRanges>> = [];
+  try {
+    busyInCalendar = await getCalendarBusyRanges(business, calendarRangeStart, calendarRangeEnd);
+  } catch {
+    throw new Error('Calendar temporarily unavailable. Please try again in a moment.');
+  }
   const slots: string[] = [];
 
   let dayYmd = startYmd;
@@ -153,11 +158,16 @@ export async function createBookingRecord(params: {
       throw new Error('Selected time is no longer available.');
     }
 
-    const busyInCalendar = await getCalendarBusyRanges(
-      params.business,
-      new Date(start.getTime() - 60 * 1000).toISOString(),
-      new Date(end.getTime() + 60 * 1000).toISOString()
-    );
+    let busyInCalendar: Awaited<ReturnType<typeof getCalendarBusyRanges>> = [];
+    try {
+      busyInCalendar = await getCalendarBusyRanges(
+        params.business,
+        new Date(start.getTime() - 60 * 1000).toISOString(),
+        new Date(end.getTime() + 60 * 1000).toISOString()
+      );
+    } catch {
+      throw new Error('Calendar temporarily unavailable. Please try again in a moment or call us directly.');
+    }
     const calendarConflict = busyInCalendar.some((b) =>
       overlaps(start, end, new Date(b.startISO), new Date(b.endISO))
     );

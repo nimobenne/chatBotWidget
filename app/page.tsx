@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { TestimonialMarquee } from '@/components/blocks/testimonial-marquee';
 import { buttonVariants } from '@/components/ui/button';
@@ -44,6 +44,14 @@ const faqs = [
     q: 'Can it handle multiple barbers?',
     a: 'Multi-barber support is on the roadmap. Today it books for the shop. Message us on WhatsApp to discuss your setup.',
   },
+  {
+    q: 'What if the AI makes a mistake?',
+    a: 'The AI only books into your real Google Calendar, so it can never double-book. If a customer asks something it can\'t handle, it gives them your phone number. You stay in control.',
+  },
+  {
+    q: 'What website platform do I need?',
+    a: 'Any platform that lets you add a script tag — WordPress, Wix, Squarespace, Webflow, Shopify, or plain HTML. We check during setup. If your platform supports it, you\'re good to go.',
+  },
 ];
 
 export default function HomePage() {
@@ -60,6 +68,11 @@ export default function HomePage() {
     s.setAttribute('data-position', 'bottom-right');
     document.body.appendChild(s);
   }
+
+  useEffect(() => {
+    const t = setTimeout(launchDemo, 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <>
@@ -81,7 +94,11 @@ export default function HomePage() {
           <div className="pointer-events-none absolute -left-10 top-0 h-48 w-48 rounded-full bg-emerald-400/15 blur-3xl" />
           <div className="pointer-events-none absolute right-0 top-10 h-44 w-44 rounded-full bg-emerald-300/10 blur-3xl" />
           <div className="relative animate-fade-in-up">
-            <div className="mb-3 text-xs uppercase tracking-[0.22em] text-emerald-300">Built for barbershops</div>
+            <div className="mb-3 flex flex-wrap gap-2">
+              <span className="text-xs uppercase tracking-[0.22em] text-emerald-300">Built for barbershops</span>
+              <span className="text-xs text-emerald-400/60">·</span>
+              <span className="text-xs uppercase tracking-[0.22em] text-emerald-400/70">Setup included · Free until 5 bookings</span>
+            </div>
             <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight text-foreground md:text-6xl">
               Turn missed calls into booked chairs, 24/7.
             </h1>
@@ -182,6 +199,9 @@ export default function HomePage() {
               <div className="text-xs uppercase tracking-widest text-emerald-400 mb-2">All inclusive</div>
               <div className="text-4xl font-bold text-foreground">€39.99<span className="text-lg font-normal text-muted-foreground">/month</span></div>
               <div className="mt-1 text-sm text-muted-foreground">No charge until your first 5 bookings</div>
+              <div className="mt-3 rounded-lg bg-emerald-900/30 border border-emerald-700/40 px-4 py-3 text-xs text-emerald-200/80 leading-relaxed">
+                Average haircut: €30. Just 2 extra bookings per month covers the full cost. Most shops make it back in the first week.
+              </div>
               <ul className="mt-5 space-y-2.5 text-sm">
                 {[
                   '24/7 AI receptionist',

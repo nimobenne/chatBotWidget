@@ -62,7 +62,9 @@ export async function getCalendarBusyRanges(
       }));
   } catch (error) {
     console.error('Failed to fetch Google Calendar events for busy ranges:', error);
-    return [];
+    // Throw instead of returning [] — an empty array makes all slots appear free,
+    // which can cause double-bookings when the calendar API is temporarily unavailable.
+    throw error;
   }
 }
 

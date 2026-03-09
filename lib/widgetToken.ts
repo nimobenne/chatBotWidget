@@ -41,6 +41,10 @@ export function verifyWidgetToken(
 ): { ok: boolean; reason?: string } {
   const sec = secret();
   if (!sec) {
+    // In production, always block if no signing secret is configured — prevents OpenAI cost abuse.
+    if (process.env.NODE_ENV === 'production') {
+      return { ok: false, reason: 'Widget signing secret not configured' };
+    }
     return widgetTokenRequired() ? { ok: false, reason: 'Widget signing secret missing' } : { ok: true };
   }
   if (!token) return { ok: false, reason: 'Missing widget token' };
