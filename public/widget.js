@@ -8,6 +8,7 @@
   const iconAttr   = script.getAttribute('data-icon')     || '';
   const greeting   = script.getAttribute('data-greeting') || 'Hi! How can I help you today?';
   const consent    = script.getAttribute('data-consent')  || '';
+  const isDemo     = script.getAttribute('data-demo')     === 'true';
   const apiBase    = new URL(script.src, window.location.href).origin;
 
   const SCISSORS_SVG = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>`;
@@ -104,6 +105,12 @@
     .dot{width:7px;height:7px;border-radius:50%;background:#9DA8B5;animation:bounce .9s ease-in-out infinite}
     .dot:nth-child(2){animation-delay:.18s} .dot:nth-child(3){animation-delay:.36s}
     @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+    /* Demo mode */
+    .demo-badge{background:rgba(255,255,255,.25);color:#fff;font-size:9px;font-weight:800;letter-spacing:.08em;padding:3px 8px;border-radius:999px;text-transform:uppercase;margin-left:6px;vertical-align:middle}
+    .demo-cta{padding:12px 14px;background:#0a1628;border-top:1px solid #2A3F52;flex-shrink:0}
+    .demo-cta-btn{background:#10B981;color:#fff;border:0;border-radius:10px;padding:11px 0;font-size:13.5px;font-weight:700;cursor:pointer;width:100%;font-family:inherit;transition:background .15s;letter-spacing:.01em}
+    .demo-cta-btn:hover{background:#059669}
 
     /* Booking UI pane */
     .bui{background:#0A1628;border-top:1px solid #2A3F52;flex-shrink:0;overflow-y:auto;max-height:370px}
@@ -836,13 +843,88 @@
 
   function handleSend() {
     const t = chatIn.value.trim();
-    if (t) sendChat(t);
+    if (t && !chatIn.disabled) sendChat(t);
+  }
+
+  // ── Demo mode ─────────────────────────────────────────────────────────────────
+  function sleepMs(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function typeDemoMsg(text, who) {
+    const row = el('div'); row.className = `row ${who} fade`;
+    const m   = el('div'); m.className = 'msg'; m.textContent = '';
+    row.appendChild(m);
+    msgsEl.appendChild(row);
+    for (const ch of text) {
+      m.textContent += ch;
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+      await sleepMs(28 + Math.random() * 22);
+    }
+  }
+
+  async function runDemoScript() {
+    chatIn.disabled = true;
+    chatSend.disabled = true;
+    chatIn.placeholder = 'Watch the demo\u2026';
+
+    const lines = [
+      { who: 'u', text: "I'd like to book a haircut",       wait: 1600 },
+      { who: 'a', text: "Of course! What day and time works best for you?", wait: 1100 },
+      { who: 'u', text: "Tomorrow at 3pm",                  wait: 1900 },
+      { who: 'a', text: "Got it \u2014 and your name?",     wait: 1000 },
+      { who: 'u', text: "Alex Johnson",                     wait: 1500 },
+      { who: 'a', text: "Last step \u2014 your email?",     wait: 900  },
+      { who: 'u', text: "alex@example.com",                 wait: 1400 },
+      { who: 'a', text: "\u2705 All set! Classic Haircut booked for Alex Johnson tomorrow at 3:00 PM.\n\nConfirmation sent to alex@example.com. See you then!", wait: 1600 },
+    ];
+
+    for (const line of lines) {
+      await sleepMs(line.wait);
+      if (line.who === 'u') {
+        await typeDemoMsg(line.text, 'u');
+      } else {
+        showTyping();
+        await sleepMs(850);
+        hideTyping();
+        addMsg(line.text, 'a');
+      }
+    }
+
+    await sleepMs(1400);
+    const cta = el('div'); cta.className = 'demo-cta fade';
+    const btn = el('button'); btn.className = 'demo-cta-btn';
+    btn.textContent = 'Try it yourself \u2192';
+    btn.onclick = exitDemoMode;
+    cta.appendChild(btn);
+    panel.appendChild(cta);
+  }
+
+  function exitDemoMode() {
+    while (msgsEl.firstChild) msgsEl.removeChild(msgsEl.firstChild);
+    const cta   = panel.querySelector('.demo-cta');   if (cta)   cta.remove();
+    const badge = panel.querySelector('.demo-badge');  if (badge) badge.remove();
+    chatIn.disabled  = false;
+    chatSend.disabled = false;
+    chatIn.placeholder = 'Ask anything\u2026';
+    addMsg(greeting, 'a');
+    showHome();
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────────
   loadConfig().finally(() => {
     addMsg(greeting, 'a');
     if (consent) addMsg(consent, 'a');
+
+    if (isDemo) {
+      // Auto-open widget and play scripted demo conversation
+      panel.classList.add('open');
+      bubble.classList.add('open');
+      nudge.classList.add('hidden');
+      const badge = el('span'); badge.className = 'demo-badge'; badge.textContent = 'DEMO';
+      panel.querySelector('.head-title').appendChild(badge);
+      runDemoScript();
+      return;
+    }
+
     if (booking.active && booking.step) {
       addMsg('Welcome back \u2014 continuing your booking.', 'a');
       const step = booking.step;

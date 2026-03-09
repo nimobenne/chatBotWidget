@@ -1,87 +1,59 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import Script from 'next/script';
 
-type Step = { name: string; status: 'pending' | 'running' | 'done' | 'failed'; detail?: string };
-
 export default function AutoDemoClient({ businessId }: { businessId: string }) {
-  const [running, setRunning] = useState(false);
-  const [steps, setSteps] = useState<Step[]>([
-    { name: 'Open widget and start booking', status: 'pending' },
-    { name: 'Select service: Classic Haircut', status: 'pending' },
-    { name: 'Select date/time: tomorrow 12:00 PM', status: 'pending' },
-    { name: 'Fill customer details', status: 'pending' },
-    { name: 'Submit booking', status: 'pending' }
-  ]);
-  const [result, setResult] = useState('');
-
-  function mark(index: number, status: Step['status'], detail?: string) {
-    setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, detail } : s)));
-  }
-
-  async function runDemo() {
-    setRunning(true);
-    setResult('');
-    setSteps((prev) => prev.map((s) => ({ ...s, status: 'pending', detail: '' })));
-
-    try {
-      mark(0, 'running');
-      await wait(400);
-      mark(0, 'done', 'Widget opened');
-
-      mark(1, 'running');
-      await wait(300);
-      mark(1, 'done', 'Classic Haircut selected');
-
-      mark(2, 'running');
-      await wait(600);
-      mark(2, 'done', 'Tomorrow 12:00 PM selected');
-
-      mark(3, 'running');
-      await wait(300);
-      mark(3, 'done', 'Customer: Demo Client, demo@example.com');
-
-      mark(4, 'running');
-      await wait(500);
-      mark(4, 'done', 'Booking confirmed (simulation)');
-      setResult('Simulation complete — widget is working correctly.');
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  useEffect(() => {
-    runDemo().catch(() => null);
-  }, []);
-
   return (
-    <main style={{ maxWidth: 900, margin: '24px auto', padding: 20 }}>
-      <Script src="/widget.js" data-business={businessId} strategy="afterInteractive" />
-      <h1 style={{ marginBottom: 8 }}>Auto Demo</h1>
-      <p style={{ color: '#94a3b8' }}>Business: <strong>{businessId}</strong> · This page auto-runs the booking flow.</p>
+    <main style={{ minHeight: '100vh', background: '#050d1a', color: '#e2e8f0', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      {/* Widget loads in demo mode — auto-opens and plays the scripted conversation */}
+      <Script src="/widget.js" data-business={businessId} data-demo="true" data-position="bottom-right" strategy="afterInteractive" />
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => runDemo()} disabled={running}>{running ? 'Running...' : 'Replay Demo'}</button>
-      </div>
+      <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
+        <div style={{ display: 'inline-block', background: 'rgba(16,185,129,.15)', border: '1px solid rgba(16,185,129,.3)', borderRadius: 999, padding: '4px 14px', fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#34d399', marginBottom: 20 }}>
+          Live Demo
+        </div>
 
-      <div style={{ border: '1px solid #334155', borderRadius: 12, padding: 12, background: '#0b1220' }}>
-        {steps.map((step, i) => (
-          <div key={step.name} style={{ padding: '8px 0', borderBottom: i === steps.length - 1 ? 'none' : '1px solid #1e293b' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-              <strong>{step.name}</strong>
-              <span style={{ color: step.status === 'done' ? '#86efac' : step.status === 'failed' ? '#fca5a5' : step.status === 'running' ? '#fde68a' : '#94a3b8' }}>{step.status}</span>
+        <h1 style={{ fontSize: 'clamp(26px,5vw,42px)', fontWeight: 700, lineHeight: 1.15, margin: '0 0 16px', letterSpacing: '-.02em' }}>
+          Watch the AI book an appointment
+        </h1>
+
+        <p style={{ fontSize: 16, color: '#94a3b8', margin: '0 0 32px', lineHeight: 1.6 }}>
+          The widget just opened in the bottom-right corner. Watch it walk a customer through a full booking — no clicks needed.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 40 }}>
+          {[
+            { icon: '⚡', label: 'Instant replies', sub: 'No hold time' },
+            { icon: '📅', label: 'Live availability', sub: 'Real calendar check' },
+            { icon: '✅', label: 'Books itself', sub: 'Zero admin work' },
+          ].map(({ icon, label, sub }) => (
+            <div key={label} style={{ background: '#0f1f35', border: '1px solid #1e3a52', borderRadius: 14, padding: '16px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#e2e8f0' }}>{label}</div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{sub}</div>
             </div>
-            {step.detail ? <div style={{ fontSize: 12, color: '#94a3b8' }}>{step.detail}</div> : null}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      {result ? <p style={{ marginTop: 12 }}>{result}</p> : null}
+        <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 28px', lineHeight: 1.6 }}>
+          After the demo finishes, click <strong style={{ color: '#94a3b8' }}>"Try it yourself"</strong> inside the widget to have a real conversation with the AI.
+        </p>
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link href="/" style={{ display: 'inline-block', padding: '10px 20px', background: '#1e293b', color: '#e2e8f0', borderRadius: 10, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+            ← Back to site
+          </Link>
+          <a
+            href="https://wa.me/31610431511?text=Hi%20WidgetAI%2C%20I%20want%20to%20set%20up%20the%20AI%20booking%20widget%20for%20my%20barbershop."
+            target="_blank"
+            rel="noreferrer"
+            style={{ display: 'inline-block', padding: '10px 20px', background: '#10B981', color: '#fff', borderRadius: 10, textDecoration: 'none', fontSize: 14, fontWeight: 700 }}
+          >
+            Get this for my shop →
+          </a>
+        </div>
+      </div>
     </main>
   );
-}
-
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
