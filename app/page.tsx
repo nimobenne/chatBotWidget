@@ -8,41 +8,42 @@ import { TestimonialMarquee } from '@/components/blocks/testimonial-marquee';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+const siteUrl = 'https://chat-bot-widget-two.vercel.app';
 const whatsappHref = 'https://wa.me/31610431511?text=Hi%20WidgetAI%2C%20I%20want%20to%20set%20up%20the%20AI%20booking%20widget%20for%20my%20barbershop.';
 
 const features = [
-  { icon: '🌙', title: '24/7 AI receptionist', desc: 'Replies the second a client messages — day, night, weekends. No missed bookings.' },
-  { icon: '📅', title: 'Live calendar check', desc: 'Checks your real availability before offering slots. No double-bookings.' },
+  { icon: '🌙', title: '24/7 AI receptionist', desc: 'Replies the second a client messages. Day, night, weekends. No missed bookings.' },
+  { icon: '📅', title: 'Live calendar check', desc: 'Checks your real availability before offering any slot. No double-bookings, ever.' },
   { icon: '✅', title: 'Books directly', desc: 'Confirms the appointment and adds it to Google Calendar automatically.' },
-  { icon: '📧', title: 'Confirmation emails', desc: 'Client gets a professional confirmation with appointment details.' },
+  { icon: '📧', title: 'Confirmation emails', desc: 'Client gets a professional confirmation with all appointment details.' },
   { icon: '📊', title: 'Owner dashboard', desc: 'See bookings, revenue, and ROI from one clean dashboard.' },
-  { icon: '📞', title: 'Graceful fallback', desc: 'If online booking fails, the bot gives clients your number. Nothing slips through.' },
+  { icon: '📞', title: 'Phone fallback', desc: 'If online booking is unavailable, the bot gives clients your number to call directly.' },
 ];
 
 const faqs = [
   {
     q: 'Does it actually book into my calendar?',
-    a: 'Yes. When a client confirms, the booking goes directly into your Google Calendar. No manual entry, no copy-pasting.',
+    a: 'Yes. When a client confirms, the booking goes directly into your Google Calendar. No manual entry.',
   },
   {
     q: 'What if a client wants to call instead?',
-    a: 'The bot gives them your phone number automatically. It never leaves a client stuck.',
+    a: 'The bot gives them your phone number. No client ever gets left without an answer.',
   },
   {
     q: 'What if I need to cancel or reschedule?',
-    a: 'Clients call you directly for changes. The bot tells them your number and you handle it your way.',
+    a: 'Clients call you directly for changes. The bot gives them your number and you handle it your way.',
   },
   {
     q: 'How long does setup take?',
-    a: 'Usually under an hour. We handle the setup for you — services, hours, calendar connection. You add one script tag and you\'re live.',
+    a: 'Under an hour. We handle your services, hours, and calendar connection. You add one script tag and go live.',
   },
   {
     q: 'When do I start paying?',
-    a: 'Not until your first 5 confirmed bookings come through the widget. No risk, no setup fee.',
+    a: 'Not until your first 5 confirmed bookings come through. No risk, no setup fee.',
   },
   {
     q: 'Can it handle multiple barbers?',
-    a: 'Multi-barber support is on the roadmap. Today it books for the shop — message us on WhatsApp to discuss your setup.',
+    a: 'Multi-barber support is on the roadmap. Today it books for the shop. Message us on WhatsApp to discuss your setup.',
   },
 ];
 
@@ -51,24 +52,21 @@ export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   function launchDemo() {
-    if (demoLoaded) {
-      // Already loaded — just open the bubble
-      const host = document.querySelector('div[data-widget-demo]');
-      if (host && host.shadowRoot) {
-        const bubble = host.shadowRoot.querySelector('.bubble') as HTMLElement | null;
-        bubble?.click();
-      }
+    if (!demoLoaded) {
+      setDemoLoaded(true);
       return;
     }
-    setDemoLoaded(true);
+    const host = document.querySelector('div[data-widget-demo]');
+    if (host && host.shadowRoot) {
+      const bubble = host.shadowRoot.querySelector('.bubble') as HTMLElement | null;
+      bubble?.click();
+    }
   }
 
   return (
     <>
-      {/* Real widget for live chat */}
       <Script src="/widget.js" data-business="examplebarber" strategy="afterInteractive" />
 
-      {/* Demo widget injected on demand */}
       {demoLoaded && (
         <Script
           src="/widget.js"
@@ -80,14 +78,19 @@ export default function HomePage() {
         />
       )}
 
-      <nav className="flex justify-end gap-4 px-5 pt-3 text-xs text-muted-foreground">
-        <Link href="/owner" className="hover:text-foreground transition-colors">Owner Portal</Link>
-        <Link href="/admin" className="hover:text-foreground transition-colors">Admin</Link>
+      <nav className="flex items-center justify-between px-5 pt-3 text-xs text-muted-foreground">
+        <a href={siteUrl} className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
+          chat-bot-widget-two.vercel.app
+        </a>
+        <div className="flex gap-4">
+          <Link href="/owner" className="hover:text-foreground transition-colors">Owner Portal</Link>
+          <Link href="/admin" className="hover:text-foreground transition-colors">Admin</Link>
+        </div>
       </nav>
 
       <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-4 md:pt-6">
 
-        {/* ── Hero ── */}
+        {/* Hero */}
         <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-emerald-900/35 via-card to-background p-6 shadow-[0_20px_80px_-40px_rgba(16,185,129,0.55)] md:p-10">
           <div className="pointer-events-none absolute -left-10 top-0 h-48 w-48 rounded-full bg-emerald-400/15 blur-3xl" />
           <div className="pointer-events-none absolute right-0 top-10 h-44 w-44 rounded-full bg-emerald-300/10 blur-3xl" />
@@ -97,26 +100,26 @@ export default function HomePage() {
               Turn missed calls into booked chairs, 24/7.
             </h1>
             <p className="mt-4 max-w-2xl text-base text-muted-foreground md:text-lg">
-              WidgetAI chats with clients, checks live availability, and books directly into your calendar.
+              An AI chat widget that answers clients, checks your live calendar, and books appointments directly. You do nothing.
             </p>
             <ul className="mt-4 space-y-1.5 text-sm text-emerald-200/90">
-              <li>✓ Replies instantly — even at 2am on a Sunday</li>
+              <li>✓ Replies instantly, even at 2am on a Sunday</li>
               <li>✓ Checks your real calendar before confirming any slot</li>
               <li>✓ Sends the client a confirmation email automatically</li>
             </ul>
             <div className="mt-6 flex flex-wrap gap-3">
               <a href={whatsappHref} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'font-semibold')}>
-                Message on WhatsApp
+                Get Started on WhatsApp
               </a>
-              <Link href="/demo/auto?biz=examplebarber" className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
+              <button onClick={launchDemo} className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
                 Try Live Demo
-              </Link>
+              </button>
             </div>
             <div className="mt-5 text-sm font-medium text-emerald-200">€39.99/month · No charge until first 5 bookings · Cancel anytime</div>
           </div>
         </section>
 
-        {/* ── Stats bar ── */}
+        {/* Stats */}
         <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { value: '150+', label: 'Bookings made' },
@@ -131,23 +134,22 @@ export default function HomePage() {
           ))}
         </section>
 
-        {/* ── Problem section ── */}
+        {/* Problem */}
         <section className="mt-8 rounded-2xl border border-border bg-card/40 p-6 md:p-8">
           <div className="max-w-2xl">
             <div className="mb-4 text-xs uppercase tracking-widest text-muted-foreground">Sound familiar?</div>
             <p className="text-xl font-semibold leading-relaxed text-foreground md:text-2xl">
               You&apos;re in the middle of a cut. The phone rings. You can&apos;t answer.
               They hang up. They book somewhere else.{' '}
-              <span className="text-muted-foreground font-normal">You never knew.</span>
+              <span className="text-muted-foreground font-normal">You never find out.</span>
             </p>
-            <p className="mt-6 text-base text-emerald-300 font-medium md:text-lg">
-              WidgetAI answers instantly. Checks your real calendar. Books the appointment.
-              While you keep cutting.
+            <p className="mt-5 text-base text-emerald-300 font-medium md:text-lg">
+              WidgetAI answers instantly. Checks your real calendar. Books the appointment. While you keep cutting.
             </p>
           </div>
         </section>
 
-        {/* ── Features ── */}
+        {/* Features */}
         <section className="mt-8">
           <h2 className="text-2xl font-semibold mb-4">Everything your front desk would do</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -161,19 +163,19 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Testimonials ── */}
+        {/* Testimonials */}
         <section className="mt-8">
           <TestimonialMarquee />
         </section>
 
-        {/* ── How onboarding works ── */}
+        {/* How it works */}
         <section className="mt-8 rounded-2xl border border-border bg-secondary/35 p-6">
           <h2 className="mt-0 text-2xl font-semibold">Live in under an hour</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             {[
-              { n: '1', title: 'Setup', desc: 'We configure your services, hours, and branding. You just review and approve.' },
-              { n: '2', title: 'Connect', desc: 'Link your Google Calendar. One OAuth click — we handle the rest.' },
-              { n: '3', title: 'Go live', desc: 'Paste one script tag on your site. That\'s it. The bot starts taking bookings.' },
+              { n: '1', title: 'Setup', desc: 'We configure your services, hours, and branding. You review and approve.' },
+              { n: '2', title: 'Connect', desc: 'Link your Google Calendar. One click and you are connected.' },
+              { n: '3', title: 'Go live', desc: 'Paste one script tag on your site. The bot starts taking bookings.' },
             ].map(({ n, title, desc }) => (
               <div key={n} className="flex gap-4">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-900/60 border border-emerald-700/50 flex items-center justify-center text-sm font-bold text-emerald-400">{n}</div>
@@ -186,7 +188,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Pricing ── */}
+        {/* Pricing */}
         <section className="mt-8" id="pricing">
           <h2 className="text-2xl font-semibold mb-4">Simple pricing, no surprises</h2>
           <div className="max-w-sm">
@@ -222,7 +224,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── FAQ ── */}
+        {/* FAQ */}
         <section className="mt-8">
           <h2 className="text-2xl font-semibold mb-4">Questions</h2>
           <div className="space-y-2 max-w-2xl">
@@ -243,12 +245,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Final CTA ── */}
+        {/* Final CTA */}
         <section className="mt-10 rounded-3xl border border-emerald-700/40 bg-gradient-to-br from-emerald-900/30 via-card to-background p-8 text-center">
-          <h2 className="text-2xl font-semibold md:text-3xl mb-3">Ready to stop missing bookings?</h2>
+          <h2 className="text-2xl font-semibold md:text-3xl mb-3">Stop missing bookings today.</h2>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            Message us on WhatsApp and we&apos;ll have you set up and taking bookings today.
-            No upfront cost. Cancel anytime.
+            Message us on WhatsApp. We will have you set up and taking bookings the same day. No upfront cost. Cancel anytime.
           </p>
           <a
             href={whatsappHref}
@@ -256,9 +257,12 @@ export default function HomePage() {
             rel="noreferrer"
             className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'font-semibold text-base px-8')}
           >
-            Message on WhatsApp — get set up today
+            Message on WhatsApp to get set up today
           </a>
           <div className="mt-4 text-xs text-muted-foreground">€39.99/month · Free until first 5 bookings · No contracts</div>
+          <div className="mt-3 text-xs text-muted-foreground/60">
+            <a href={siteUrl} className="hover:text-muted-foreground transition-colors">{siteUrl}</a>
+          </div>
         </section>
 
       </main>
