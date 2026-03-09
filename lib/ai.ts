@@ -134,17 +134,17 @@ export async function runAssistant(input: { businessId: string; sessionId: strin
         description: 'Book an appointment',
         parameters: {
           type: 'object',
-            properties: {
-              serviceName: { type: 'string' },
-              dateTime: { type: 'string' },
-              customerName: { type: 'string' },
-              customerPhone: { type: 'string' },
-              customerEmail: { type: 'string' }
-            },
-            required: ['serviceName', 'dateTime', 'customerName', 'customerEmail']
-          }
+          properties: {
+            serviceName: { type: 'string' },
+            dateTime: { type: 'string' },
+            customerName: { type: 'string' },
+            customerPhone: { type: 'string' },
+            customerEmail: { type: 'string' }
+          },
+          required: ['serviceName', 'dateTime', 'customerName', 'customerEmail']
         }
       }
+    },
     {
       type: 'function' as const,
       function: {
