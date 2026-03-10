@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { runAssistant, validateChatInput } from '@/lib/ai';
 import { getStore } from '@/lib/store';
 import { getRequestContext, extractOriginHost } from '@/lib/observability';
@@ -72,7 +73,11 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     ctx.log('error', 'Chat failed', { error: message });
-    return NextResponse.json({ error: message, code: 'CHAT_REQUEST_INVALID' }, { status: 400 });
+    const isClientError = error instanceof z.ZodError || message.includes('Unknown businessId');
+    return NextResponse.json(
+      { error: message, code: 'CHAT_REQUEST_INVALID' },
+      { status: isClientError ? 400 : 500 }
+    );
   }
 }
 

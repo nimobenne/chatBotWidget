@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
 import { TestimonialMarquee } from '@/components/blocks/testimonial-marquee';
@@ -30,7 +29,7 @@ const faqs = [
   },
   {
     q: 'What if I need to cancel or reschedule?',
-    a: 'Clients call you directly for changes. The bot gives them your number and you handle it your way.',
+    a: 'Clients can ask the bot to cancel or reschedule. It forwards the request to you by email so you can follow up. They can also call you directly — the bot gives them your number.',
   },
   {
     q: 'How long does setup take?',
@@ -82,8 +81,6 @@ export default function HomePage() {
           chat-bot-widget-two.vercel.app
         </a>
         <div className="flex gap-4">
-          <Link href="/owner" className="hover:text-foreground transition-colors">Owner Portal</Link>
-          <Link href="/admin" className="hover:text-foreground transition-colors">Admin</Link>
         </div>
       </nav>
 
@@ -125,10 +122,10 @@ export default function HomePage() {
         {/* Stats */}
         <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { value: '150+', label: 'Bookings made' },
-            { value: '40+',  label: 'Barbershops onboarded' },
             { value: '24/7', label: 'Always online' },
-            { value: '€0',   label: 'Until you see results' },
+            { value: '<1min', label: 'Average response time' },
+            { value: '€0', label: 'Until you see results' },
+            { value: '0', label: 'Missed bookings' },
           ].map(({ value, label }) => (
             <div key={label} className="rounded-xl border border-border bg-card/70 p-4 text-center">
               <div className="text-2xl font-bold text-emerald-400">{value}</div>

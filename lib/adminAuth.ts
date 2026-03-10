@@ -4,7 +4,14 @@ import { NextRequest } from 'next/server';
 const ADMIN_TOKEN_TTL_SECONDS = 60 * 60 * 12;
 
 function adminSecret(): string {
-  return process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD || 'change-me';
+  const secret = process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+      throw new Error('OWNER_AUTH_SECRET (or ADMIN_PASSWORD) must be set in production');
+    }
+    return 'dev-only-insecure-secret';
+  }
+  return secret;
 }
 
 export function adminPassword(): string {
@@ -49,5 +56,7 @@ export function isAdminAuthed(req: NextRequest): boolean {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   if (token && verifyAdminToken(token)) return true;
   const provided = req.headers.get('x-admin-password');
-  return !!provided && provided === adminPassword();
+  if (!provided) return false;
+  const expected = adminPassword();
+  return safeEqual(provided, expected);
 }

@@ -99,7 +99,7 @@ export async function getAvailableSlots(business: BusinessConfig, serviceName: s
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + service.durationMin + (service.bufferMin ?? 0));
       if (end > close) continue;
-      const bookingConflict = existing.some((b: BookingRecord) => overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
+      const bookingConflict = existing.some((b: BookingRecord) => b.status !== 'cancelled' && overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
       const calendarConflict = busyInCalendar.some((b) => overlaps(start, end, new Date(b.startISO), new Date(b.endISO)));
       const hasConflict = bookingConflict || calendarConflict;
       if (!hasConflict) slots.push(start.toISOString());
@@ -138,7 +138,7 @@ export async function createBookingRecord(params: {
         startTimeISO: start.toISOString(),
         endTimeISO: end.toISOString(),
         customerName: params.customerName,
-        customerPhone: params.customerPhone || params.customerEmail || '',
+        customerPhone: params.customerPhone || '',
         customerEmail: params.customerEmail,
         status: 'requested',
         notes: params.notes
@@ -153,7 +153,7 @@ export async function createBookingRecord(params: {
     }
 
     const existing = await store.listBookings(params.business.businessId);
-    const conflict = existing.some((b) => overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
+    const conflict = existing.some((b) => b.status !== 'cancelled' && overlaps(start, end, new Date(b.startTimeISO), new Date(b.endTimeISO)));
     if (conflict) {
       throw new Error('Selected time is no longer available.');
     }
@@ -182,7 +182,7 @@ export async function createBookingRecord(params: {
     startTimeISO: start.toISOString(),
     endTimeISO: end.toISOString(),
     customerName: params.customerName,
-    customerPhone: params.customerPhone || params.customerEmail || '',
+    customerPhone: params.customerPhone || '',
     customerEmail: params.customerEmail,
     status: params.status,
     notes: params.notes

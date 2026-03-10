@@ -12,7 +12,14 @@ function base64UrlDecode(value: string): string {
 }
 
 function tokenSecret(): string {
-  return process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD || 'change-me';
+  const secret = process.env.OWNER_AUTH_SECRET || process.env.ADMIN_PASSWORD;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+      throw new Error('OWNER_AUTH_SECRET (or ADMIN_PASSWORD) must be set in production');
+    }
+    return 'dev-only-insecure-secret';
+  }
+  return secret;
 }
 
 function sign(payloadB64: string): string {

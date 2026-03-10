@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getStore } from '@/lib/store';
 import { createBookingRecord } from '@/lib/booking';
-import { sendBookingConfirmation } from '@/lib/email';
+import { sendBookingConfirmation, sendOwnerBookingNotification } from '@/lib/email';
 import { getRequestContext, extractOriginHost } from '@/lib/observability';
 import { verifyWidgetToken } from '@/lib/widgetToken';
 import { getSupabaseServiceClient } from '@/lib/ownerCredentials';
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
       serviceName: parsed.serviceName,
       startTimeISO: parsed.startTimeISO,
       customerName: parsed.customerName,
-      customerPhone: parsed.customerPhone || parsed.customerEmail,
+      customerPhone: parsed.customerPhone,
       customerEmail: parsed.customerEmail,
       status: 'confirmed'
     });
@@ -206,7 +206,17 @@ export async function POST(req: NextRequest) {
       businessName: business.name,
       businessAddress: business.contact.address,
       businessPhone: business.contact.phone
-    }).catch(() => null);
+    }).catch((err) => console.error('Failed to send booking confirmation email:', err));
+
+    await sendOwnerBookingNotification({
+      ownerEmail: business.contact.email,
+      customerName: parsed.customerName,
+      serviceName: parsed.serviceName,
+      dateTime: parsed.startTimeISO,
+      businessName: business.name,
+      customerEmail: parsed.customerEmail,
+      customerPhone: parsed.customerPhone
+    }).catch((err) => console.error('Failed to send owner notification email:', err));
 
     const res = NextResponse.json({
       bookingId: booking.bookingId,

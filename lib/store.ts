@@ -287,9 +287,11 @@ class SupabaseDataStore implements DataStore {
     const { data, error } = await this.client
       .from('bookings')
       .select('*')
-      .eq('business_id', businessDbId);
+      .eq('business_id', businessDbId)
+      .gte('start_time', new Date().toISOString())
+      .neq('status', 'cancelled');
     if (error) throw new Error(error.message);
-    
+
     return (data as SupabaseBooking[]).map((b) => ({
       bookingId: b.id,
       businessId: businessId,
@@ -299,7 +301,7 @@ class SupabaseDataStore implements DataStore {
       customerName: b.customer_name,
       customerPhone: b.customer_phone,
       customerEmail: b.customer_email,
-      status: b.status as 'confirmed' | 'requested',
+      status: b.status as 'confirmed' | 'requested' | 'cancelled',
       notes: b.notes,
       createdAt: b.created_at
     }));
@@ -506,6 +508,7 @@ export function getStore(): DataStore {
   }
   
   if (dataStoreType === 'postgres') {
+    // postgres and supabase are the same store implementation
     try {
       if (!singleton || !(singleton instanceof SupabaseDataStore)) {
         singleton = new SupabaseDataStore();

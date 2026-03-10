@@ -10,6 +10,7 @@ export interface Service {
 export interface BusinessConfig {
   businessId: string;
   name: string;
+  businessType?: string;
   timezone: string;
   hours: Record<string, { open: string; close: string } | null>;
   services: Service[];
@@ -39,7 +40,7 @@ export interface BookingRecord {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
-  status: 'confirmed' | 'requested';
+  status: 'confirmed' | 'requested' | 'cancelled';
   notes?: string;
   createdAt: string;
 }

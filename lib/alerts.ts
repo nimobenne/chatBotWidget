@@ -19,7 +19,7 @@ export async function sendAlertEmail(input: {
   `;
 
   try {
-    await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -27,7 +27,10 @@ export async function sendAlertEmail(input: {
       },
       body: JSON.stringify({ from, to, subject, html })
     });
-  } catch {
-    // non-fatal
+    if (!response.ok) {
+      console.error(`Alert email failed (${response.status}):`, await response.text().catch(() => ''));
+    }
+  } catch (err) {
+    console.error('Alert email send error:', err);
   }
 }

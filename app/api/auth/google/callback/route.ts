@@ -24,6 +24,9 @@ export async function GET(req: NextRequest) {
     if (!businessId || !returnedNonce || !/^[a-zA-Z0-9_-]+$/.test(businessId)) {
       return NextResponse.redirect(new URL('/admin?error=invalid_state', req.url));
     }
+    if (!['admin', 'owner'].includes(source)) {
+      return NextResponse.redirect(new URL('/admin?error=invalid_state', req.url));
+    }
 
     const cookieNonce = req.cookies.get('google_oauth_state')?.value || '';
     if (!cookieNonce || cookieNonce !== returnedNonce) {
