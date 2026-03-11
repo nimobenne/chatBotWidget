@@ -27,6 +27,7 @@ export default function OwnerPage() {
   const [snippetGreeting, setSnippetGreeting] = useState("Hi! Ready to book your next cut?");
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [domainLiveStatus, setDomainLiveStatus] = useState<Record<string, { checking: boolean; live?: boolean; checkedUrl?: string; foundScript?: string | null; error?: string }>>({});
+  const [calendarStatus, setCalendarStatus] = useState<{ loading: boolean; connected?: boolean; usable?: boolean; error?: string | null }>({ loading: false });
 
   const selected = useMemo(
     () => businesses.find((b) => b.businessId === selectedBusinessId) || null,
@@ -86,6 +87,22 @@ export default function OwnerPage() {
       return;
     }
     setDashboard(data);
+    loadCalendarStatus(businessId);
+  }
+
+  async function loadCalendarStatus(businessId: string) {
+    setCalendarStatus({ loading: true });
+    try {
+      const res = await fetch(`/api/auth/google/status?businessId=${encodeURIComponent(businessId)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setCalendarStatus({ loading: false, error: friendlyError(data) });
+        return;
+      }
+      setCalendarStatus({ loading: false, connected: data.connectedInDb, usable: data.usable, error: data.checkError });
+    } catch {
+      setCalendarStatus({ loading: false, error: 'Failed to check calendar status' });
+    }
   }
 
   function connectCalendar() {
@@ -95,25 +112,6 @@ export default function OwnerPage() {
         const data = await r.json();
         if (!r.ok) throw new Error(friendlyError(data));
         window.location.href = data.url;
-      })
-      .catch((e) => setMsg(String(e.message || e)));
-  }
-
-  function checkCalendarStatus() {
-    if (!selectedBusinessId) return;
-    fetch(`/api/auth/google/status?businessId=${encodeURIComponent(selectedBusinessId)}`)
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(friendlyError(data));
-        if (!data.connectedInDb) {
-          setMsg(`No calendar connection row exists for ${selectedBusinessId}.`);
-          return;
-        }
-        if (data.usable) {
-          setMsg(`Calendar connected for ${selectedBusinessId}. calendarId=${data.calendarId}.`);
-          return;
-        }
-        setMsg(`Calendar row exists but token is not usable. ${data.checkError || ''}`.trim());
       })
       .catch((e) => setMsg(String(e.message || e)));
   }
@@ -191,8 +189,25 @@ export default function OwnerPage() {
       <section style={{ marginTop: 14, border: '1px solid #334155', borderRadius: 12, padding: 14, background: '#111827' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
           {selected && <span style={{ fontWeight: 600, color: '#e2e8f0', padding: '8px 0', marginRight: 4 }}>{selected.name}</span>}
-          <button onClick={connectCalendar} disabled={!selectedBusinessId}>Connect Calendar</button>
-          <button onClick={checkCalendarStatus} disabled={!selectedBusinessId}>Check Calendar Status</button>
+          {calendarStatus.loading ? (
+            <span style={{ fontSize: 13, color: '#94a3b8' }}>Checking calendar...</span>
+          ) : calendarStatus.connected && calendarStatus.usable ? (
+            <span style={{ fontSize: 13, color: '#86efac', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#86efac', display: 'inline-block' }} />
+              Calendar connected
+            </span>
+          ) : (
+            <>
+              <span style={{ fontSize: 13, color: calendarStatus.connected ? '#fbbf24' : '#fca5a5', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: calendarStatus.connected ? '#fbbf24' : '#fca5a5', display: 'inline-block' }} />
+                {calendarStatus.connected ? 'Calendar issue' : 'No calendar'}
+                {calendarStatus.error ? ` — ${calendarStatus.error}` : ''}
+              </span>
+              <button onClick={connectCalendar} disabled={!selectedBusinessId}>
+                {calendarStatus.connected ? 'Reconnect Calendar' : 'Connect Calendar'}
+              </button>
+            </>
+          )}
           <button onClick={() => exportCsv('bookings')} disabled={!selectedBusinessId}>Export Bookings CSV</button>
           <button onClick={() => exportCsv('handoffs')} disabled={!selectedBusinessId}>Export Handoffs CSV</button>
         </div>

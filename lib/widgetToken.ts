@@ -37,8 +37,9 @@ export function signWidgetToken(params: { businessId: string; host: string; ttlS
 
 export function verifyWidgetToken(
   token: string | null,
-  expected: { businessId: string; host: string }
-): { ok: boolean; reason?: string } {
+  expected: { businessId: string; host: string },
+  options?: { graceSeconds?: number }
+): { ok: boolean; reason?: string; expired?: boolean } {
   const sec = secret();
   if (!sec) {
     // In production, always block if no signing secret is configured — prevents OpenAI cost abuse.
@@ -68,7 +69,11 @@ export function verifyWidgetToken(
 
   if (payload.businessId !== expected.businessId) return { ok: false, reason: 'Business mismatch' };
   if (payload.host !== expected.host) return { ok: false, reason: 'Host mismatch' };
-  if (payload.exp < Math.floor(Date.now() / 1000)) return { ok: false, reason: 'Widget token expired' };
+
+  const now = Math.floor(Date.now() / 1000);
+  const grace = options?.graceSeconds ?? 0;
+  if (payload.exp < now - grace) return { ok: false, reason: 'Widget token expired' };
+  if (payload.exp < now) return { ok: true, expired: true };
 
   return { ok: true };
 }

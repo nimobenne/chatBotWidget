@@ -6,6 +6,16 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || process.env.NEXT_PUBLIC_SITE_URL + '/api/auth/google/callback';
 
+export class CalendarAuthError extends Error {
+  constructor(message: string) { super(message); this.name = 'CalendarAuthError'; }
+}
+
+export interface CalendarHealthStatus {
+  healthy: boolean;
+  errorType?: 'auth_revoked' | 'network' | 'unknown';
+  errorMessage?: string;
+}
+
 export interface CalendarEventResult {
   eventId: string;
   htmlLink: string;
@@ -60,10 +70,13 @@ export async function getCalendarBusyRanges(
         startISO: e.start?.dateTime as string,
         endISO: e.end?.dateTime as string
       }));
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to fetch Google Calendar events for busy ranges:', error);
-    // Throw instead of returning [] — an empty array makes all slots appear free,
-    // which can cause double-bookings when the calendar API is temporarily unavailable.
+    const code = error?.code || error?.response?.status;
+    const msg = error?.message || '';
+    if (code === 401 || code === 403 || msg.includes('invalid_grant') || msg.includes('Token has been expired or revoked')) {
+      throw new CalendarAuthError(msg);
+    }
     throw error;
   }
 }
@@ -122,6 +135,29 @@ ${booking.notes ? `Notes: ${booking.notes}` : ''}
   } catch (error) {
     console.error('Failed to create calendar event:', error);
     throw error;
+  }
+}
+
+export async function checkCalendarHealth(businessId: string): Promise<CalendarHealthStatus> {
+  const store = getStore();
+  const conn = await store.getGoogleCalendarConnection(businessId);
+  if (!conn) return { healthy: false, errorType: 'auth_revoked', errorMessage: 'No connection found' };
+
+  try {
+    const auth = getOAuthClient(conn.refreshToken, conn.tokenType, conn.scope);
+    const calendar = google.calendar({ version: 'v3', auth });
+    await calendar.calendarList.list({ maxResults: 1 });
+    return { healthy: true };
+  } catch (error: any) {
+    const code = error?.code || error?.response?.status;
+    const msg = error?.message || 'Unknown error';
+    if (code === 401 || code === 403 || msg.includes('invalid_grant') || msg.includes('Token has been expired or revoked')) {
+      return { healthy: false, errorType: 'auth_revoked', errorMessage: msg };
+    }
+    if (msg.includes('ENOTFOUND') || msg.includes('ETIMEDOUT') || msg.includes('fetch failed')) {
+      return { healthy: false, errorType: 'network', errorMessage: msg };
+    }
+    return { healthy: false, errorType: 'unknown', errorMessage: msg };
   }
 }
 

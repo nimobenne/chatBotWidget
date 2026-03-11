@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Settings } from 'lucide-react';
 
 import { TestimonialMarquee } from '@/components/blocks/testimonial-marquee';
 import { buttonVariants } from '@/components/ui/button';
@@ -81,6 +82,9 @@ export default function HomePage() {
           chat-bot-widget-two.vercel.app
         </a>
         <div className="flex gap-4">
+          <a href="/admin" className="text-muted-foreground hover:text-emerald-400 transition-colors" title="Admin">
+            <Settings size={16} />
+          </a>
         </div>
       </nav>
 

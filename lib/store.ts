@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { BookingRecord, BusinessConfig, ConversationLog, HandoffRecord } from './types';
 import { normalizeStoreMode } from './config';
@@ -209,6 +209,7 @@ const businessConfigCache = new Map<string, { config: BusinessConfig; expiresAt:
 
 class SupabaseDataStore implements DataStore {
   private client;
+  private _serviceClient: SupabaseClient | null = null;
   private businessIdCache: Map<string, string> = new Map();
 
   constructor() {
@@ -218,6 +219,16 @@ class SupabaseDataStore implements DataStore {
       throw new Error('Supabase credentials not configured');
     }
     this.client = createClient(supabaseUrl, supabaseKey);
+  }
+
+  private serviceClient(): SupabaseClient {
+    if (!this._serviceClient) {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!url || !key) throw new Error('Service role key not configured');
+      this._serviceClient = createClient(url, key);
+    }
+    return this._serviceClient;
   }
 
   private async getBusinessDbId(slug: string): Promise<string | null> {
@@ -431,14 +442,14 @@ class SupabaseDataStore implements DataStore {
     const businessDbId = await this.getBusinessDbId(businessId);
     if (!businessDbId) return null;
     
-    const { data, error } = await this.client
+    const { data, error } = await this.serviceClient()
       .from('google_calendar_connections')
       .select('*')
       .eq('business_id', businessDbId)
       .single();
-    
+
     if (error || !data) return null;
-    
+
     return {
       businessId: businessId,
       calendarId: data.calendar_id,
@@ -453,9 +464,9 @@ class SupabaseDataStore implements DataStore {
   async saveGoogleCalendarConnection(conn: Omit<GoogleCalendarConnection, 'createdAt' | 'updatedAt'>): Promise<void> {
     const businessDbId = await this.getBusinessDbId(conn.businessId);
     if (!businessDbId) throw new Error('Business not found');
-    
+
     const now = new Date().toISOString();
-    const { error } = await this.client
+    const { error } = await this.serviceClient()
       .from('google_calendar_connections')
       .upsert({
         business_id: businessDbId,
@@ -465,14 +476,14 @@ class SupabaseDataStore implements DataStore {
         scope: conn.scope,
         updated_at: now
       }, { onConflict: 'business_id' });
-    
+
     if (error) throw new Error(error.message);
   }
 
   async removeGoogleCalendarConnection(businessId: string): Promise<void> {
     const businessDbId = await this.getBusinessDbId(businessId);
     if (!businessDbId) return;
-    const { error } = await this.client
+    const { error } = await this.serviceClient()
       .from('google_calendar_connections')
       .delete()
       .eq('business_id', businessDbId);

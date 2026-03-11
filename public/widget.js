@@ -212,6 +212,18 @@
     .chat-send{padding:9px 16px;border:0;border-radius:22px;background:${accent};color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s;flex-shrink:0}
     .chat-send:hover{background:#059669}
     .chat-send:disabled{opacity:.45;cursor:not-allowed}
+
+    /* Consent gate */
+    .consent-wrap{padding:24px 18px;display:flex;flex-direction:column;gap:14px;text-align:center}
+    .consent-text{font-size:13px;color:#9DA8B5;line-height:1.55}
+    .consent-link{color:${accent};text-decoration:none;font-weight:600}
+    .consent-link:hover{text-decoration:underline}
+    .consent-check-row{display:flex;align-items:flex-start;gap:10px;text-align:left;padding:0 4px}
+    .consent-cb{width:18px;height:18px;accent-color:${accent};flex-shrink:0;margin-top:1px;cursor:pointer}
+    .consent-cb-label{font-size:12px;color:#cbd5e1;cursor:pointer;line-height:1.4}
+    .consent-accept{padding:12px;background:${accent};color:#fff;border:0;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s}
+    .consent-accept:hover{background:#059669}
+    .consent-accept:disabled{opacity:.4;cursor:not-allowed}
   `;
 
   const bubble = el('button');
@@ -357,6 +369,76 @@
     stepsEl.innerHTML = html;
   }
 
+  // ── GDPR consent ──────────────────────────────────────────────────────────────
+  const consentKey = `ai_receptionist_consent_${businessId}`;
+  function hasConsent() {
+    if (isDemo) return true;
+    try { return JSON.parse(localStorage.getItem(consentKey) || 'null')?.consented === true; }
+    catch { return false; }
+  }
+  function grantConsent() {
+    try { localStorage.setItem(consentKey, JSON.stringify({ consented: true, timestamp: Date.now() })); } catch {}
+  }
+  function showConsentGate() {
+    showChatBar(false);
+    clearBui();
+    const wrap = el('div'); wrap.className = 'consent-wrap fade';
+
+    const txt = el('div'); txt.className = 'consent-text';
+    txt.textContent = consent || 'This chat assistant uses AI to help you book appointments. Your messages and booking details are processed to provide this service.';
+
+    const link = el('a'); link.className = 'consent-link';
+    link.href = `${apiBase}/privacy`; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = 'Read our Privacy Policy';
+
+    const checkRow = el('div'); checkRow.className = 'consent-check-row';
+    const cb = el('input'); cb.type = 'checkbox'; cb.className = 'consent-cb'; cb.id = 'consent-cb';
+    const cbLabel = el('label'); cbLabel.className = 'consent-cb-label'; cbLabel.htmlFor = 'consent-cb';
+    cbLabel.textContent = 'I agree to the processing of my data as described in the privacy policy';
+    checkRow.appendChild(cb); checkRow.appendChild(cbLabel);
+
+    const acceptBtn = el('button'); acceptBtn.className = 'consent-accept';
+    acceptBtn.textContent = 'Start Chat'; acceptBtn.disabled = true;
+    cb.onchange = () => { acceptBtn.disabled = !cb.checked; };
+    acceptBtn.onclick = () => {
+      grantConsent();
+      clearBui();
+      showChatBar(true);
+      showHome();
+    };
+
+    wrap.appendChild(txt); wrap.appendChild(link); wrap.appendChild(checkRow); wrap.appendChild(acceptBtn);
+    buiEl.appendChild(wrap);
+  }
+
+  // ── Token refresh ────────────────────────────────────────────────────────────
+  async function refreshToken() {
+    try {
+      const r = await fetch(`${apiBase}/api/widget/token/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken },
+        body: JSON.stringify({ businessId })
+      });
+      if (r.ok) {
+        const data = await r.json();
+        if (data.widgetToken) { widgetToken = data.widgetToken; return true; }
+      }
+    } catch {}
+    return false;
+  }
+
+  async function apiFetch(url, options) {
+    let r = await fetch(url, options);
+    if (r.status === 401) {
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        const newHeaders = { ...options.headers, 'x-widget-token': widgetToken };
+        r = await fetch(url, { ...options, headers: newHeaders });
+      }
+    }
+    return r;
+  }
+
   // ── Config ────────────────────────────────────────────────────────────────────
   async function loadConfig() {
     try {
@@ -379,7 +461,7 @@
 
   // ── API ───────────────────────────────────────────────────────────────────────
   async function apiAvailability(serviceName, dateISO) {
-    const r = await fetch(`${apiBase}/api/booking/availability`, {
+    const r = await apiFetch(`${apiBase}/api/booking/availability`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken },
       body: JSON.stringify({ businessId, serviceName, date: dateISO })
     });
@@ -391,7 +473,7 @@
       (booking.customerName || '').toLowerCase().trim(), (booking.customerEmail || '').toLowerCase().trim()].join('|').slice(0, 190);
     const body = { businessId, serviceName: booking.serviceName, startTimeISO: booking.selectedSlotISO, customerName: booking.customerName, customerEmail: booking.customerEmail, idempotencyKey: key };
     if (booking.customerPhone) body.customerPhone = booking.customerPhone;
-    const r = await fetch(`${apiBase}/api/booking/create?bid=${encodeURIComponent(businessId)}`, {
+    const r = await apiFetch(`${apiBase}/api/booking/create?bid=${encodeURIComponent(businessId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken, 'x-idempotency-key': key },
       body: JSON.stringify(body)
@@ -831,7 +913,7 @@
     addMsg(msg, 'u');
     showTyping();
     try {
-      const r    = await fetch(`${apiBase}/api/chat?bid=${encodeURIComponent(businessId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken }, body: JSON.stringify({ businessId, sessionId, message: msg }) });
+      const r    = await apiFetch(`${apiBase}/api/chat?bid=${encodeURIComponent(businessId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-widget-token': widgetToken }, body: JSON.stringify({ businessId, sessionId, message: msg }) });
       const data = await r.json();
       hideTyping();
       addMsg(data.error || data.message || 'How can I help?', 'a');
@@ -912,7 +994,6 @@
   // ── Init ──────────────────────────────────────────────────────────────────────
   loadConfig().finally(() => {
     addMsg(greeting, 'a');
-    if (consent) addMsg(consent, 'a');
 
     if (isDemo) {
       // Auto-open widget and play scripted demo conversation
@@ -922,6 +1003,11 @@
       const badge = el('span'); badge.className = 'demo-badge'; badge.textContent = 'DEMO';
       panel.querySelector('.head-title').appendChild(badge);
       runDemoScript();
+      return;
+    }
+
+    if (!hasConsent()) {
+      showConsentGate();
       return;
     }
 
