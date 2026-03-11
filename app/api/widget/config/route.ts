@@ -14,13 +14,15 @@ export async function GET(req: NextRequest) {
     if (!business) return NextResponse.json({ error: 'Invalid businessId' }, { status: 404 });
 
     const origin = req.headers.get('origin');
-    const host = extractOriginHost(req);
-    const isSameHost = host && host === req.nextUrl.hostname;
-    if (host && !isSameHost && !domainAllowed(host, business.allowedDomains)) {
+    const rawHost = extractOriginHost(req);
+    const isSameHost = !rawHost || rawHost === req.nextUrl.hostname;
+    if (rawHost && !isSameHost && !domainAllowed(rawHost, business.allowedDomains)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
-    const widgetToken = host ? signWidgetToken({ businessId: business.businessId, host }) : null;
+    // Fall back to the server hostname when no Origin header (same-origin requests)
+    const signingHost = rawHost || req.nextUrl.hostname;
+    const widgetToken = signWidgetToken({ businessId: business.businessId, host: signingHost });
     const payload = {
       businessId: business.businessId,
       name: business.name,
@@ -32,11 +34,11 @@ export async function GET(req: NextRequest) {
       widgetToken
     };
     const res = NextResponse.json(payload);
-    if (origin && host && (isSameHost || domainAllowed(host, business.allowedDomains))) {
+    if (origin && rawHost && (isSameHost || domainAllowed(rawHost, business.allowedDomains))) {
       res.headers.set('Access-Control-Allow-Origin', origin);
       res.headers.set('Vary', 'Origin');
     }
-    ctx.log('info', 'Widget config served', { businessId, host, tokenIssued: !!widgetToken });
+    ctx.log('info', 'Widget config served', { businessId, host: signingHost, tokenIssued: !!widgetToken });
     return res;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
