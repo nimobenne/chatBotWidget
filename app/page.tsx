@@ -128,7 +128,7 @@ export default function HomePage() {
               <a href={whatsappHref} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'font-semibold')}>
                 Get Started on WhatsApp
               </a>
-              <a href={emailHref} className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'font-semibold')}>
+              <a href={emailHref} className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'font-semibold')}>
                 Get Started via Email
               </a>
               <button onClick={launchDemo} className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
@@ -245,7 +245,7 @@ export default function HomePage() {
               </a>
               <a
                 href={emailHref}
-                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'w-full mt-2 font-semibold')}
+                className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'w-full mt-2 font-semibold')}
               >
                 Get started via Email
               </a>
@@ -291,7 +291,7 @@ export default function HomePage() {
             </a>
             <a
               href={emailHref}
-              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'font-semibold text-base px-8')}
+              className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'font-semibold text-base px-8')}
             >
               Get in touch via Email
             </a>
