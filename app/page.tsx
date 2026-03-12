@@ -8,7 +8,8 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const siteUrl = 'https://chat-bot-widget-two.vercel.app';
-const whatsappHref = 'https://wa.me/31610431511?text=Hi%20WidgetAI%2C%20I%20want%20to%20set%20up%20the%20AI%20booking%20widget%20for%20my%20barbershop.';
+const whatsappHref = 'https://wa.me/31610431511?text=Hi%20WidgetAI%2C%20I%20want%20to%20set%20up%20the%20AI%20booking%20widget%20for%20my%20business.';
+const emailHref = 'mailto:nimobenne@gmail.com?subject=WidgetAI%20Setup&body=Hi%2C%20I%27d%20like%20to%20set%20up%20WidgetAI%20for%20my%20business.';
 
 const features = [
   { icon: '🌙', title: '24/7 AI receptionist', desc: 'Replies the second a client messages. Day, night, weekends. No missed bookings.' },
@@ -41,8 +42,8 @@ const faqs = [
     a: 'Not until your first 5 confirmed bookings come through. No risk, no setup fee.',
   },
   {
-    q: 'Can it handle multiple barbers?',
-    a: 'Multi-barber support is on the roadmap. Today it books for the shop. Message us on WhatsApp to discuss your setup.',
+    q: 'Can it handle multiple staff?',
+    a: 'Multi-staff support is on the roadmap. Today it books for the shop. Message us on WhatsApp to discuss your setup.',
   },
   {
     q: 'What if the AI makes a mistake?',
@@ -51,6 +52,18 @@ const faqs = [
   {
     q: 'What website platform do I need?',
     a: 'Any platform that lets you add a script tag — WordPress, Wix, Squarespace, Webflow, Shopify, or plain HTML. We check during setup. If your platform supports it, you\'re good to go.',
+  },
+  {
+    q: 'Does it work on mobile?',
+    a: 'Yes. The widget works in any browser on any device — desktop, tablet, and mobile. Your clients can book from their phone just as easily as from a computer.',
+  },
+  {
+    q: 'Can it help both barbershops and hair salons?',
+    a: 'Yes. WidgetAI is set up around your specific services, hours, and business name — whether you run a barbershop or a hair salon. It answers questions and books appointments for any appointment-based shop.',
+  },
+  {
+    q: 'What kinds of questions can it answer?',
+    a: 'Pricing, services, opening hours, location, walk-in availability, booking help, cancellations, and rescheduling. If a question is outside its scope, it gives clients your phone number so they can reach you directly.',
   },
 ];
 
@@ -96,15 +109,15 @@ export default function HomePage() {
           <div className="pointer-events-none absolute right-0 top-10 h-44 w-44 rounded-full bg-emerald-300/10 blur-3xl" />
           <div className="relative animate-fade-in-up">
             <div className="mb-3 flex flex-wrap gap-2">
-              <span className="text-xs uppercase tracking-[0.22em] text-emerald-300">Built for barbershops</span>
+              <span className="text-xs uppercase tracking-[0.22em] text-emerald-300">Built for barbershops & hair salons</span>
               <span className="text-xs text-emerald-400/60">·</span>
               <span className="text-xs uppercase tracking-[0.22em] text-emerald-400/70">Setup included · Free until 5 bookings</span>
             </div>
             <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight text-foreground md:text-6xl">
-              Turn missed calls into booked chairs, 24/7.
+              Turn more website visitors into booked appointments — 24/7
             </h1>
             <p className="mt-4 max-w-2xl text-base text-muted-foreground md:text-lg">
-              An AI chat widget that answers clients, checks your live calendar, and books appointments directly. You do nothing.
+              WidgetAI helps barbershops and hair salons answer common questions, guide visitors to booking, and capture appointments automatically — even when the shop is closed.
             </p>
             <ul className="mt-4 space-y-1.5 text-sm text-emerald-200/90">
               <li>✓ Replies instantly, even at 2am on a Sunday</li>
@@ -115,11 +128,14 @@ export default function HomePage() {
               <a href={whatsappHref} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'font-semibold')}>
                 Get Started on WhatsApp
               </a>
+              <a href={emailHref} className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'font-semibold')}>
+                Get Started via Email
+              </a>
               <button onClick={launchDemo} className={buttonVariants({ variant: 'secondary', size: 'lg' })}>
                 Try Live Demo
               </button>
             </div>
-            <div className="mt-5 text-sm font-medium text-emerald-200">€39.99/month · No charge until first 5 bookings · Cancel anytime</div>
+            <div className="mt-5 text-sm font-medium text-emerald-200">£39.99/month · No charge until first 5 bookings · Cancel anytime</div>
           </div>
         </section>
 
@@ -128,7 +144,7 @@ export default function HomePage() {
           {[
             { value: '24/7', label: 'Always online' },
             { value: '<1min', label: 'Average response time' },
-            { value: '€0', label: 'Until you see results' },
+            { value: '£0', label: 'Until you see results' },
             { value: '0', label: 'Missed bookings' },
           ].map(({ value, label }) => (
             <div key={label} className="rounded-xl border border-border bg-card/70 p-4 text-center">
@@ -143,12 +159,12 @@ export default function HomePage() {
           <div className="max-w-2xl">
             <div className="mb-4 text-xs uppercase tracking-widest text-muted-foreground">Sound familiar?</div>
             <p className="text-xl font-semibold leading-relaxed text-foreground md:text-2xl">
-              You&apos;re in the middle of a cut. The phone rings. You can&apos;t answer.
+              You&apos;re with a client. The phone rings. You can&apos;t answer.
               They hang up. They book somewhere else.{' '}
               <span className="text-muted-foreground font-normal">You never find out.</span>
             </p>
             <p className="mt-5 text-base text-emerald-300 font-medium md:text-lg">
-              WidgetAI answers instantly. Checks your real calendar. Books the appointment. While you keep cutting.
+              WidgetAI answers instantly. Checks your real calendar. Books the appointment. While you focus on the client in front of you.
             </p>
           </div>
         </section>
@@ -198,10 +214,10 @@ export default function HomePage() {
           <div className="max-w-sm">
             <div className="rounded-2xl border-2 border-emerald-700/60 bg-card p-6 shadow-[0_0_40px_-10px_rgba(16,185,129,0.25)]">
               <div className="text-xs uppercase tracking-widest text-emerald-400 mb-2">All inclusive</div>
-              <div className="text-4xl font-bold text-foreground">€39.99<span className="text-lg font-normal text-muted-foreground">/month</span></div>
+              <div className="text-4xl font-bold text-foreground">£39.99<span className="text-lg font-normal text-muted-foreground">/month</span></div>
               <div className="mt-1 text-sm text-muted-foreground">No charge until your first 5 bookings</div>
               <div className="mt-3 rounded-lg bg-emerald-900/30 border border-emerald-700/40 px-4 py-3 text-xs text-emerald-200/80 leading-relaxed">
-                Average haircut: €30. Just 2 extra bookings per month covers the full cost. Most shops make it back in the first week.
+                Average appointment: £30–£60. Just 1–2 extra bookings per month covers the full cost. Most shops make it back in the first week.
               </div>
               <ul className="mt-5 space-y-2.5 text-sm">
                 {[
@@ -226,6 +242,12 @@ export default function HomePage() {
                 className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'w-full mt-6 font-semibold')}
               >
                 Get started on WhatsApp
+              </a>
+              <a
+                href={emailHref}
+                className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'w-full mt-2 font-semibold')}
+              >
+                Get started via Email
               </a>
             </div>
           </div>
@@ -258,15 +280,23 @@ export default function HomePage() {
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             Message us on WhatsApp. We will have you set up and taking bookings the same day. No upfront cost. Cancel anytime.
           </p>
-          <a
-            href={whatsappHref}
-            target="_blank"
-            rel="noreferrer"
-            className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'font-semibold text-base px-8')}
-          >
-            Message on WhatsApp to get set up today
-          </a>
-          <div className="mt-4 text-xs text-muted-foreground">€39.99/month · Free until first 5 bookings · No contracts</div>
+          <div className="flex flex-wrap justify-center gap-3">
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'font-semibold text-base px-8')}
+            >
+              Message on WhatsApp to get set up today
+            </a>
+            <a
+              href={emailHref}
+              className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'font-semibold text-base px-8')}
+            >
+              Get in touch via Email
+            </a>
+          </div>
+          <div className="mt-4 text-xs text-muted-foreground">£39.99/month · Free until first 5 bookings · No contracts</div>
           <div className="mt-3 text-xs text-muted-foreground/60">
             <a href={siteUrl} className="hover:text-muted-foreground transition-colors">{siteUrl}</a>
           </div>
