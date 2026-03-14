@@ -136,6 +136,18 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, []);
 
+  // Console easter egg — a small hello for any developer who opens DevTools
+  useEffect(() => {
+    console.log(
+      '%c✂  WidgetAI',
+      'color: #c97c2a; font-size: 20px; font-weight: 700; font-family: serif; letter-spacing: 0.06em;',
+    );
+    console.log(
+      '%cBuilding something? Say hi → nimobenne@gmail.com',
+      'color: #7a5c30; font-size: 11px; font-family: sans-serif;',
+    );
+  }, []);
+
   return (
     <>
       <nav aria-label="Site navigation" className="flex items-center justify-between px-5 pt-3 text-xs text-muted-foreground">
@@ -154,6 +166,11 @@ export default function HomePage() {
 
         {/* Hero — staggered entrance */}
         <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-amber-900/25 via-card to-background p-6 md:p-10">
+          {/* Ambient orb — warm lamp glow that breathes slowly */}
+          <div
+            aria-hidden="true"
+            className="hero-orb pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-amber-500/[0.07] blur-3xl"
+          />
           <div className="relative">
             <span
               className="text-xs uppercase tracking-[0.22em] text-amber-300 animate-fade-in-up"
@@ -185,7 +202,7 @@ export default function HomePage() {
                 rel="noreferrer"
                 className={cn(
                   buttonVariants({ variant: 'default', size: 'lg' }),
-                  'w-full justify-center font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
+                  'btn-shimmer w-full justify-center font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
                 )}
               >
                 Get started on WhatsApp
@@ -199,7 +216,11 @@ export default function HomePage() {
                   'w-full justify-center transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
                 )}
               >
-                {demoLoaded ? 'Demo active ↘' : 'Try Live Demo'}
+                {demoLoaded ? (
+                  <>Demo active <span className="arrow-nudge">↘</span></>
+                ) : (
+                  'Try Live Demo'
+                )}
               </button>
             </div>
             <div
@@ -234,9 +255,9 @@ export default function HomePage() {
             {features.map(({ n, title, desc }) => (
               <div
                 key={n}
-                className="flex cursor-default items-start gap-5 border-l-2 border-l-transparent px-5 py-4 transition-colors duration-150 hover:border-l-amber-500/40 hover:bg-amber-900/10 sm:gap-8"
+                className="group flex cursor-default items-start gap-5 border-l-2 border-l-transparent px-5 py-4 transition-colors duration-150 hover:border-l-amber-500/40 hover:bg-amber-900/10 sm:gap-8"
               >
-                <span className="mt-0.5 w-6 flex-shrink-0 font-mono text-xs text-amber-500/50">{n}</span>
+                <span className="mt-0.5 w-6 flex-shrink-0 font-mono text-xs text-amber-500/50 transition-colors duration-200 group-hover:text-amber-400">{n}</span>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:gap-8">
                   <div className="flex-shrink-0 break-words text-sm font-semibold text-foreground sm:w-44">{title}</div>
                   <div className="min-w-0 text-sm text-muted-foreground">{desc}</div>
@@ -257,7 +278,7 @@ export default function HomePage() {
           <div className="mt-5 grid gap-6 md:grid-cols-3">
             {steps.map(({ n, title, desc }) => (
               <div key={n} className="flex gap-4 step-item">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-amber-700/50 bg-amber-900/60 text-sm font-bold text-amber-400">
+                <div className="step-num flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-amber-700/50 bg-amber-900/60 text-sm font-bold text-amber-400">
                   {n}
                 </div>
                 <div className="min-w-0">
@@ -292,7 +313,7 @@ export default function HomePage() {
                   'Setup included, no tech skills needed',
                   'Cancel anytime',
                 ].map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-foreground/90">
+                  <li key={item} className="step-item flex items-start gap-2 text-foreground/90">
                     <span className="mt-0.5 flex-shrink-0 text-amber-400">✓</span>
                     <span>{item}</span>
                   </li>
@@ -304,7 +325,7 @@ export default function HomePage() {
                 rel="noreferrer"
                 className={cn(
                   buttonVariants({ variant: 'default', size: 'lg' }),
-                  'mt-6 w-full font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97]',
+                  'btn-shimmer mt-6 w-full font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97]',
                 )}
               >
                 Get started on WhatsApp
@@ -331,7 +352,11 @@ export default function HomePage() {
                     type="button"
                     aria-expanded={openFaq === i}
                     aria-controls={answerId}
-                    className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className={cn(
+                      'flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                      openFaq === i ? 'text-amber-200' : 'text-foreground',
+                    )}
+                    style={{ transition: 'color 220ms var(--ease-out-quart), background-color 150ms' }}
                     onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   >
                     <span className="min-w-0">{q}</span>
@@ -378,7 +403,7 @@ export default function HomePage() {
             rel="noreferrer"
             className={cn(
               buttonVariants({ variant: 'default', size: 'lg' }),
-              'w-full justify-center px-8 text-base font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
+              'btn-shimmer w-full justify-center px-8 text-base font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
             )}
           >
             Get started on WhatsApp
@@ -404,7 +429,7 @@ export default function HomePage() {
           tabIndex={showStickyCta ? 0 : -1}
           className={cn(
             buttonVariants({ variant: 'default', size: 'lg' }),
-            'w-full justify-center font-semibold',
+            'btn-shimmer w-full justify-center font-semibold',
           )}
         >
           Get started on WhatsApp
