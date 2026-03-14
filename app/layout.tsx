@@ -22,10 +22,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <strong className="text-foreground">WidgetAI</strong>
           </div>
           <div className="flex flex-wrap gap-3">
-            <a href="mailto:nimobenne@gmail.com">nimobenne@gmail.com</a>
-            <a href="https://wa.me/31610431511" target="_blank" rel="noreferrer">WhatsApp</a>
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
+            <a href="mailto:nimobenne@gmail.com" className="transition-colors hover:text-foreground">nimobenne@gmail.com</a>
+            <a href="https://wa.me/31610431511" target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground">WhatsApp</a>
+            <a href="/privacy" className="transition-colors hover:text-foreground">Privacy</a>
+            <a href="/terms" className="transition-colors hover:text-foreground">Terms</a>
           </div>
         </footer>
       </body>

@@ -5,20 +5,22 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --background: 220 68% 6%;
-    --foreground: 214 32% 91%;
-    --card: 222 47% 11%;
-    --card-foreground: 214 32% 91%;
-    --primary: 142 71% 45%;
-    --primary-foreground: 140 100% 98%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 214 32% 91%;
-    --muted: 215 28% 18%;
-    --muted-foreground: 214 20% 69%;
-    --border: 217 32% 25%;
-    --input: 217 32% 25%;
-    --ring: 142 71% 45%;
+    --background: 25 15% 6%;
+    --foreground: 38 25% 90%;
+    --card: 22 12% 10%;
+    --card-foreground: 38 25% 90%;
+    --primary: 34 68% 48%;
+    --primary-foreground: 25 10% 8%;
+    --secondary: 25 10% 14%;
+    --secondary-foreground: 38 25% 90%;
+    --muted: 25 8% 16%;
+    --muted-foreground: 35 10% 55%;
+    --border: 28 10% 20%;
+    --input: 28 10% 20%;
+    --ring: 34 68% 48%;
     --radius: 0.85rem;
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   * {
@@ -30,8 +32,8 @@
     @apply min-h-screen bg-background text-foreground antialiased;
     margin: 0;
     background-image:
-      radial-gradient(circle at 8% 6%, rgb(16 185 129 / 0.18), transparent 34%),
-      radial-gradient(circle at 92% 0%, rgb(5 150 105 / 0.16), transparent 32%);
+      radial-gradient(circle at 8% 6%, rgb(180 120 30 / 0.10), transparent 34%),
+      radial-gradient(circle at 92% 0%, rgb(160 100 20 / 0.08), transparent 32%);
   }
 
   a {
@@ -50,5 +52,54 @@
 
   button {
     @apply rounded-md bg-primary px-3 py-2 text-primary-foreground;
+  }
+}
+
+/* Staggered step items — animate when parent .reveal gets .in-view */
+.step-item {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 460ms var(--ease-out-quart),
+    transform 460ms var(--ease-out-quart);
+}
+
+.reveal.in-view .step-item:nth-child(1) { opacity: 1; transform: translateY(0); transition-delay: 60ms; }
+.reveal.in-view .step-item:nth-child(2) { opacity: 1; transform: translateY(0); transition-delay: 160ms; }
+.reveal.in-view .step-item:nth-child(3) { opacity: 1; transform: translateY(0); transition-delay: 260ms; }
+
+/* Reduced motion override for step items */
+@media (prefers-reduced-motion: reduce) {
+  .step-item {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 480ms var(--ease-out-quart),
+    transform 480ms var(--ease-out-quart);
+}
+
+.reveal.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced motion — collapse all animation to instant */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

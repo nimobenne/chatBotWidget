@@ -49,7 +49,7 @@ const config: Config = {
       },
       animation: {
         marquee: 'marquee 28s linear infinite',
-        'fade-in-up': 'fade-in-up 600ms ease-out both'
+        'fade-in-up': 'fade-in-up 580ms cubic-bezier(0.25, 1, 0.5, 1) both'
       }
     }
   },
