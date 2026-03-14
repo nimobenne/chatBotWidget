@@ -75,11 +75,10 @@ const steps = [
 
 export default function HomePage() {
   const [demoLoaded, setDemoLoaded] = useState(false);
-  // Ref prevents the stale-closure double-load bug: if the user clicks
-  // "Try Live Demo" before the 1.5s autoload fires, both paths read the
-  // same ref value and only one script element is ever appended.
   const demoLoadedRef = useRef(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  // Shows the sticky mobile CTA once the hero CTA scrolls out of view
+  const [showStickyCta, setShowStickyCta] = useState(false);
 
   function launchDemo() {
     if (demoLoadedRef.current) return;
@@ -91,7 +90,6 @@ export default function HomePage() {
     s.setAttribute('data-demo', 'true');
     s.setAttribute('data-position', 'bottom-right');
     s.onerror = () => {
-      // Reset so user can retry if the script fails to load
       demoLoadedRef.current = false;
       setDemoLoaded(false);
     };
@@ -126,18 +124,33 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, []);
 
+  // Sticky mobile CTA: show when hero CTA buttons leave the viewport
+  useEffect(() => {
+    const heroCta = document.getElementById('hero-cta');
+    if (!heroCta || !('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyCta(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(heroCta);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <nav aria-label="Site navigation" className="flex items-center justify-between px-5 pt-3 text-xs text-muted-foreground">
-        <a href={siteUrl} className="font-medium text-amber-400 transition-colors hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">
+        <a
+          href={siteUrl}
+          className="truncate max-w-[220px] font-medium text-amber-400 transition-colors hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm sm:max-w-none"
+        >
           chat-bot-widget-two.vercel.app
         </a>
-        <a href="/admin" className="p-2 -m-2 text-muted-foreground transition-colors hover:text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm" title="Admin" aria-label="Admin settings">
+        <a href="/admin" className="p-2 -m-2 flex-shrink-0 text-muted-foreground transition-colors hover:text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm" title="Admin" aria-label="Admin settings">
           <Settings size={16} />
         </a>
       </nav>
 
-      <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-4 md:pt-6">
+      <main className="mx-auto w-full max-w-6xl px-5 pb-28 pt-4 md:pb-16 md:pt-6">
 
         {/* Hero — staggered entrance */}
         <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-amber-900/25 via-card to-background p-6 md:p-10">
@@ -160,8 +173,10 @@ export default function HomePage() {
             >
               WidgetAI answers questions, checks your real calendar, and confirms bookings automatically — even when the shop is closed.
             </p>
+            {/* id="hero-cta" lets the sticky CTA observer watch this element */}
             <div
-              className="mt-6 flex flex-wrap items-center gap-3 animate-fade-in-up"
+              id="hero-cta"
+              className="mt-6 flex flex-col gap-3 animate-fade-in-up sm:flex-row sm:flex-wrap sm:items-center"
               style={{ animationDelay: '280ms' }}
             >
               <a
@@ -170,7 +185,7 @@ export default function HomePage() {
                 rel="noreferrer"
                 className={cn(
                   buttonVariants({ variant: 'default', size: 'lg' }),
-                  'font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97]',
+                  'w-full justify-center font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
                 )}
               >
                 Get started on WhatsApp
@@ -181,7 +196,7 @@ export default function HomePage() {
                 disabled={demoLoaded}
                 className={cn(
                   buttonVariants({ variant: 'secondary', size: 'lg' }),
-                  'transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97]',
+                  'w-full justify-center transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
                 )}
               >
                 {demoLoaded ? 'Demo active ↘' : 'Try Live Demo'}
@@ -222,9 +237,8 @@ export default function HomePage() {
                 className="flex cursor-default items-start gap-5 border-l-2 border-l-transparent px-5 py-4 transition-colors duration-150 hover:border-l-amber-500/40 hover:bg-amber-900/10 sm:gap-8"
               >
                 <span className="mt-0.5 w-6 flex-shrink-0 font-mono text-xs text-amber-500/50">{n}</span>
-                {/* min-w-0 prevents flex children from overflowing their container */}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:gap-8">
-                  <div className="flex-shrink-0 overflow-wrap-anywhere text-sm font-semibold text-foreground sm:w-44">{title}</div>
+                  <div className="flex-shrink-0 break-words text-sm font-semibold text-foreground sm:w-44">{title}</div>
                   <div className="min-w-0 text-sm text-muted-foreground">{desc}</div>
                 </div>
               </div>
@@ -320,7 +334,6 @@ export default function HomePage() {
                     className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   >
-                    {/* min-w-0 prevents the question from overflowing the flex row */}
                     <span className="min-w-0">{q}</span>
                     <span
                       className="flex-shrink-0 text-base text-muted-foreground"
@@ -365,7 +378,7 @@ export default function HomePage() {
             rel="noreferrer"
             className={cn(
               buttonVariants({ variant: 'default', size: 'lg' }),
-              'px-8 text-base font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97]',
+              'w-full justify-center px-8 text-base font-semibold transition-transform duration-150 hover:scale-[1.02] hover:opacity-100 active:scale-[0.97] sm:w-auto',
             )}
           >
             Get started on WhatsApp
@@ -374,6 +387,29 @@ export default function HomePage() {
         </section>
 
       </main>
+
+      {/* Sticky mobile CTA — appears once the hero CTA scrolls off screen, hidden on md+ */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background px-4 pb-4 pt-3 md:hidden"
+        style={{
+          transform: showStickyCta ? 'translateY(0)' : 'translateY(100%)',
+          transition: 'transform 300ms var(--ease-out-quart)',
+        }}
+        aria-hidden={!showStickyCta}
+      >
+        <a
+          href={whatsappHref}
+          target="_blank"
+          rel="noreferrer"
+          tabIndex={showStickyCta ? 0 : -1}
+          className={cn(
+            buttonVariants({ variant: 'default', size: 'lg' }),
+            'w-full justify-center font-semibold',
+          )}
+        >
+          Get started on WhatsApp
+        </a>
+      </div>
     </>
   );
 }
