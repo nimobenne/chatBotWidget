@@ -35,7 +35,7 @@ function TestimonialCard({ quote, name, shop }: Testimonial) {
   return (
     <article
       aria-label={`Testimonial from ${name}, ${shop}`}
-      className="w-[280px] shrink-0 rounded-xl border border-border/80 bg-card/80 p-4 backdrop-blur"
+      className="w-[280px] shrink-0 rounded-xl border border-border/80 bg-card/80 p-4 backdrop-blur transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-amber-500/30"
     >
       <div className="mb-3 flex items-center gap-1 text-amber-300">
         {Array.from({ length: 5 }).map((_, index) => (

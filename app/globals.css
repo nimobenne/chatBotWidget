@@ -90,6 +90,74 @@
   transform: translateY(0);
 }
 
+/* Extended step stagger — for lists with more than 3 items (e.g. pricing features) */
+.reveal.in-view .step-item:nth-child(4) { opacity: 1; transform: translateY(0); transition-delay: 340ms; }
+.reveal.in-view .step-item:nth-child(5) { opacity: 1; transform: translateY(0); transition-delay: 400ms; }
+.reveal.in-view .step-item:nth-child(6) { opacity: 1; transform: translateY(0); transition-delay: 450ms; }
+.reveal.in-view .step-item:nth-child(7) { opacity: 1; transform: translateY(0); transition-delay: 490ms; }
+
+/* ─── CTA button brass-shine shimmer ────────────────────────────────────── */
+@keyframes shimmer-sweep {
+  from { left: -60%; }
+  to   { left: 130%; }
+}
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset-y: 0;
+  left: -60%;
+  width: 38%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(38 80% 85% / 0.22),
+    transparent
+  );
+  transform: skewX(-10deg);
+  pointer-events: none;
+}
+.btn-shimmer:hover::after {
+  animation: shimmer-sweep 500ms var(--ease-out-expo) forwards;
+}
+
+/* ─── Step number glow — plays once on section enter ────────────────────── */
+@keyframes step-num-glow {
+  0%   { box-shadow: 0 0 0 0 hsl(34 68% 48% / 0); }
+  45%  { box-shadow: 0 0 14px 5px hsl(34 68% 48% / 0.38); }
+  100% { box-shadow: 0 0 0 0 hsl(34 68% 48% / 0); }
+}
+.reveal.in-view .step-num {
+  animation: step-num-glow 900ms var(--ease-out-expo) both;
+}
+.reveal.in-view .step-item:nth-child(1) .step-num { animation-delay: 120ms; }
+.reveal.in-view .step-item:nth-child(2) .step-num { animation-delay: 220ms; }
+.reveal.in-view .step-item:nth-child(3) .step-num { animation-delay: 320ms; }
+
+/* ─── Hero ambient orb — slow warm breath ───────────────────────────────── */
+@keyframes ambient-breathe {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50%       { opacity: 1;    transform: scale(1.10); }
+}
+.hero-orb {
+  animation: ambient-breathe 8s ease-in-out infinite;
+}
+
+/* ─── Demo-active arrow nudge — plays once on mount ─────────────────────── */
+@keyframes arrow-nudge {
+  0%   { transform: translate(0, 0); }
+  35%  { transform: translate(4px, 4px); }
+  65%  { transform: translate(-1px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+.arrow-nudge {
+  display: inline-block;
+  animation: arrow-nudge 520ms var(--ease-out-quart) both;
+}
+
 /* Reduced motion — collapse all animation to instant */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
